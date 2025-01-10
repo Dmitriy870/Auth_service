@@ -7,8 +7,9 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from database.config import Settings
 
-# DatabaseHelper
+
 class DatabaseHelper:
     def __init__(self, url: str, echo: bool):
         self.engine = create_async_engine(url=url, echo=echo)
@@ -35,3 +36,7 @@ class DatabaseHelper:
         async with self.session_factory() as session:
             yield session
             await session.close()
+
+
+settings = Settings()
+database = DatabaseHelper(settings.Db_settings.url, settings.Db_settings.echo)

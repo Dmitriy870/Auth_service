@@ -4,28 +4,22 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 
-from database.config import Settings
-from database.db import DatabaseHelper
+from database.db import database
 from models import Base
+from users import router as user_router
 
-# Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-# Инициализация настроек и подключения к базе данных
-settings: Settings = Settings()
-db_helper = DatabaseHelper(settings.Db_settings.url, settings.Db_settings.echo)
 
-
-# Асинхронный контекстный менеджер для управления жизненным циклом приложения
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Lifespan started")
     try:
-        async with db_helper.engine.begin() as conn:
+        async with database.engine.begin() as conn:
             logger.info("Connection to the database established")
             await conn.run_sync(Base.metadata.create_all)
             logger.info("Tables created successfully")
@@ -36,11 +30,11 @@ async def lifespan(app: FastAPI):
     logger.info("Lifespan ended")
 
 
-# Создание FastAPI приложения
 app = FastAPI(lifespan=lifespan)
 
+app.include_router(user_router)
 
-# Пример маршрута
+
 @app.get("/")
 async def hello_world():
     logger.info("Hello World endpoint called")

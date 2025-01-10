@@ -1,19 +1,14 @@
-from enum import Enum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Enum as sqlalchemy_Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models import Base
+from roles.enums import RoleEnum
 
 if TYPE_CHECKING:
     from permissions.models import RolePermission
     from users.models import User
-
-
-class RoleEnum(str, Enum):
-    ADMIN = "admin"
-    USER = "user"
 
 
 class Role(Base):
