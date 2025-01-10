@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:13
+    container_name: auth_db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - auth_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - core_network
+
+  redis:
+    image: redis:7
+    container_name: auth_redis
+    networks:
+      - core_network
+
+  kafka:
+    image: bitnami/kafka:3.4
+    container_name: auth_kafka
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    networks:
+      - core_network
+
+  zookeeper:
+    image: bitnami/zookeeper:3.8
+    container_name: auth_zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ALLOW_ANONYMOUS_LOGIN: "yes"
+    networks:
+      - core_network
+
+  auth:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: auth_app
+    volumes:
+      - ./src:/app/src
+      - ./alembic:/app/alembic
+    ports:
+      - "8001:8000"
+    depends_on:
+      - db
+      - redis
+      - kafka
+    env_file:
+      - .env
+    networks:
+      - core_network
+
+networks:
+  core_network:
+    external: true
+
+volumes:
+  auth_postgres_data:
