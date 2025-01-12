@@ -12,5 +12,4 @@ class DBSettings(BaseModel):
 
 
 class Settings(BaseSettings):
-    api_v1_prefix: str = "api/v1/"
     Db_settings: DBSettings = DBSettings()

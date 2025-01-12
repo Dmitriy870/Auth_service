@@ -7,8 +7,8 @@ from models import Base
 from roles.enums import RoleEnum
 
 if TYPE_CHECKING:
-    from permissions.models import RolePermission
-    from users.models import User
+    from user_permissions import RolePermission
+    from users import User
 
 
 class Role(Base):

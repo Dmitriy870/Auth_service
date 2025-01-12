@@ -6,6 +6,6 @@ class ActionEnum(str, Enum):
     CONFIRMATION = "confirmation"
 
 
-class Expire_time_Enum(int, Enum):
+class ExpireTimeEnum(int, Enum):
     RESET = 15
     CONFIRMATION = 60

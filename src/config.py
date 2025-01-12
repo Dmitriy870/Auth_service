@@ -1,7 +1,34 @@
-from typing import Optional
-
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 from pydantic import PostgresDsn, RedisDsn
 from pydantic_settings import BaseSettings
+
+
+class JWTConfig(BaseSettings):
+    private_key_path: str
+    public_key_path: str
+
+    @property
+    def private_key(self):
+        with open(self.private_key_path, "rb") as key_file:
+            return serialization.load_pem_private_key(
+                key_file.read(),
+                password=None,
+                backend=default_backend(),
+            )
+
+    @property
+    def public_key(self):
+        with open(self.public_key_path, "rb") as key_file:
+            return serialization.load_pem_public_key(
+                key_file.read(),
+                backend=default_backend(),
+            )
+
+    class Config:
+        env_prefix = "JWT_"
+        env_file = ".env"
+        env_file_encoding = "utf-8"
 
 
 class BasicConfig(BaseSettings):
@@ -36,7 +63,7 @@ class KafkaConfig(BaseSettings):
 
 class TelegramConfig(BaseSettings):
     token: str
-    chat_id: Optional[int]
+    chat_id: int
 
     class Config:
         env_prefix = "TELEGRAM_"
@@ -71,6 +98,10 @@ class PostgresConfig(BaseSettings):
         env_file_encoding = "utf-8"
 
 
+class VersionConfig(BaseSettings):
+    api_v1_prefix: str = "/api/v1"
+
+
 class AppConfig(BaseSettings):
     postgres: PostgresConfig = PostgresConfig()
     redis: RedisConfig = RedisConfig()
@@ -78,6 +109,8 @@ class AppConfig(BaseSettings):
     telegram: TelegramConfig = TelegramConfig()
     email: EmailConfig = EmailConfig()
     basic: BasicConfig = BasicConfig()
+    jwt: JWTConfig = JWTConfig()
+    version: VersionConfig = VersionConfig()
 
     class Config:
         env_file = ".env"

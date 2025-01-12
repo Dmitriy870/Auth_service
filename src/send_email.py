@@ -37,7 +37,6 @@ def send_email(
             server.starttls()
             server.login(sender_email, sender_password)
             server.sendmail(sender_email, recipients, message.as_string())
-            print(f"Email sent successfully to {recipients}")
     except SMTPAuthenticationError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

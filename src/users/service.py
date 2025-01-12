@@ -4,7 +4,7 @@ from sqlalchemy.future import select
 
 from roles.enums import RoleEnum
 from roles.models import Role
-from users.enums import ActionEnum, Expire_time_Enum
+from users.enums import ActionEnum, ExpireTimeEnum
 from users.exceptions import UserHTTPException
 from users.models import User
 from users.schemas import UserCreate, UserResponse
@@ -40,7 +40,7 @@ async def register_user(user_data: UserCreate, session: AsyncSession) -> UserRes
         await session.refresh(user)
 
         token = generate_token(
-            user.id, ActionEnum.CONFIRMATION.value, Expire_time_Enum.CONFIRMATION.value
+            user.id, ActionEnum.CONFIRMATION.value, ExpireTimeEnum.CONFIRMATION.value
         )
         send_action_email(
             email=user.email,
@@ -92,7 +92,7 @@ async def resend_confirmation_email(email: str, session: AsyncSession) -> dict:
         raise UserHTTPException.user_already_confirmed
 
     token = generate_token(
-        user.id, ActionEnum.CONFIRMATION.value, Expire_time_Enum.CONFIRMATION.value
+        user.id, ActionEnum.CONFIRMATION.value, ExpireTimeEnum.CONFIRMATION.value
     )
     send_action_email(
         email=user.email,
@@ -100,7 +100,7 @@ async def resend_confirmation_email(email: str, session: AsyncSession) -> dict:
         action=ActionEnum.CONFIRMATION.value,
     )
 
-    return UserHTTPException.confirmation_email_sent
+    return {"detail": "Confirmation email sent."}
 
 
 async def request_password_reset(email: str, session: AsyncSession) -> dict:
@@ -114,14 +114,14 @@ async def request_password_reset(email: str, session: AsyncSession) -> dict:
     if not user:
         raise UserHTTPException.user_not_found
 
-    token = generate_token(user.id, ActionEnum.RESET.value, Expire_time_Enum.RESET.value)
+    token = generate_token(user.id, ActionEnum.RESET.value, ExpireTimeEnum.RESET.value)
     send_action_email(
         email=user.email,
         token=token,
         action=ActionEnum.RESET.value,
     )
 
-    return UserHTTPException.password_reset_email_sent
+    return {"detail": "Password reset email successfully sent."}
 
 
 async def reset_password(token: str, new_password: str, session: AsyncSession) -> dict:
@@ -141,4 +141,4 @@ async def reset_password(token: str, new_password: str, session: AsyncSession) -
     user.password = hashed_password
     await session.commit()
 
-    return UserHTTPException.password_reset_successful
+    return {"detail": "Password successfully reset."}

@@ -7,7 +7,7 @@ import jwt
 from config import AppConfig
 from send_email import send_email
 from users.enums import ActionEnum
-from users.exceptions import ActionException, TokenException
+from users.exceptions import UserHTTPException
 
 config = AppConfig()
 
@@ -25,26 +25,26 @@ def verify_password(password: str, hashed_password: str) -> bool:
 
 
 def generate_token(user_id: UUID, action: str, expire_minutes: int) -> str:
-    """Generates a token for a specific action (email confirmation or password reset)."""
+    """Generates a token for a specific action using RS256."""
     payload = {
         "user_id": str(user_id),
         "action": action,
         "exp": datetime.now(UTC) + timedelta(minutes=expire_minutes),
     }
-    return jwt.encode(payload, config.jwt.secret_key, algorithm=config.jwt.algorithm)
+    return jwt.encode(payload, config.jwt.private_key, algorithm="RS256")
 
 
 def verify_token(token: str, action: str) -> UUID:
-    """Verifies and decodes a token for a specific action."""
+    """Verifies and decodes a token for a specific action using RS256."""
     try:
-        payload = jwt.decode(token, config.jwt.secret_key, algorithms=[config.jwt.algorithm])
+        payload = jwt.decode(token, config.jwt.public_key, algorithms=["RS256"])
         if payload["action"] != action:
-            raise ActionException.invalid_action
+            raise UserHTTPException.invalid_action
         return UUID(payload["user_id"])
     except jwt.ExpiredSignatureError:
-        raise TokenException.token_expired_exception
+        raise UserHTTPException.token_expired_exception
     except jwt.InvalidTokenError:
-        raise TokenException.invalid_token
+        raise UserHTTPException.invalid_token
 
 
 def send_action_email(email: str | list[str], token: str, action: str):
@@ -57,7 +57,7 @@ def send_action_email(email: str | list[str], token: str, action: str):
         subject = "Email Confirmation"
         body = f"Click the link to confirm your email: {url}"
     elif action == ActionEnum.RESET.value:
-        url = f"{base_url}/reset-password?token={token}"
+        url = f"{base_url}/reset-password/confirm?token={token}"
         subject = "Password Reset"
         body = f"Click the link to reset your password: {url}"
     else:

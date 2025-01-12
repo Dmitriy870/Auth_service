@@ -23,6 +23,9 @@ class UserResponse(UserBase):
     id: UUID
     created_at: datetime
     updated_at: datetime
+    is_approved: bool
+    is_globally_blocked: bool
+    role_id: UUID
 
     class Config:
-        orm_mode = True
+        from_attributes = True

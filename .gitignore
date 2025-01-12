@@ -159,3 +159,5 @@ cython_debug/
 data
 ../.idea
 *.env
+private_key.pem
+public_key.pem

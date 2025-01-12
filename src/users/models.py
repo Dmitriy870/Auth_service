@@ -7,12 +7,11 @@ from typing_extensions import TYPE_CHECKING
 from models import Base
 
 if TYPE_CHECKING:
-    from permissions.models import UserPermission
     from roles.models import Role
+    from user_permissions import UserPermission
 
 
 class User(Base):
-
     username: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     email: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     password: Mapped[str] = mapped_column(String, nullable=False)

@@ -15,8 +15,8 @@ class Permission(Base):
     name: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     description: Mapped[str] = mapped_column(Text, nullable=True)
 
-    role_permissions: Mapped[list["RolePermission"]] = relationship(back_populates="permission")
-    user_permissions: Mapped[list["UserPermission"]] = relationship(back_populates="permission")
+    role_permissions: Mapped["RolePermission"] = relationship(back_populates="permission")
+    user_permissions: Mapped["UserPermission"] = relationship(back_populates="permission")
 
 
 class RolePermission(Base):

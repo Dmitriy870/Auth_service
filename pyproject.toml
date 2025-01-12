@@ -22,6 +22,7 @@ importlib-metadata = "<5.0.0"
 flake8 = "^7.1.1"
 pyjwt = "^2.10.1"
 bcrypt = "^4.2.1"
+cryptography = "^44.0.0"
 
 
 [build-system]

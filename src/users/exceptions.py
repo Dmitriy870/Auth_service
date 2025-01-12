@@ -1,20 +1,6 @@
 from fastapi import HTTPException, status
 
 
-class ActionException:
-    invalid_action = HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid action in token"
-    )
-
-
-class TokenException:
-    token_expired_exception = HTTPException(
-        status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid action in token"
-    )
-
-    invalid_token = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token.")
-
-
 class UserHTTPException:
     """Custom HTTP exceptions related to user operations."""
 
@@ -38,7 +24,12 @@ class UserHTTPException:
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail="An error occurred while registering the user.",
     )
+    token_expired_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid action in token"
+    )
 
-    password_reset_successful = {"detail": "Password successfully reset."}
-    confirmation_email_sent = {"detail": "Confirmation email successfully sent."}
-    password_reset_email_sent = {"detail": "Password reset email successfully sent."}
+    invalid_token = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token.")
+
+    invalid_action = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid action in token"
+    )
