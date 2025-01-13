@@ -6,25 +6,25 @@ from typing import List, Union
 
 from fastapi import HTTPException, status
 
-from config import AppConfig
+from config import EmailConfig
 
-config = AppConfig()
+email_config = EmailConfig()
 
 
 def send_email(
     subject: str,
     body: str,
     recipients: Union[List[str], str],
-):
+) -> None:
     if isinstance(recipients, str):
         recipients = [recipients]
     elif not isinstance(recipients, list) or not all(isinstance(r, str) for r in recipients):
         raise ValueError("Recipients must be a list of strings or a single string.")
 
-    sender_email = config.email.host_user
-    sender_password = config.email.host_password
-    smtp_server = config.email.host
-    smtp_port = config.email.port
+    sender_email = email_config.host_user
+    sender_password = email_config.host_password
+    smtp_server = email_config.host
+    smtp_port = email_config.port
 
     message = MIMEMultipart()
     message["From"] = sender_email

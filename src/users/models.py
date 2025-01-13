@@ -2,13 +2,8 @@ import uuid
 
 from sqlalchemy import Boolean, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing_extensions import TYPE_CHECKING
 
 from models import Base
-
-if TYPE_CHECKING:
-    from roles.models import Role
-    from user_permissions import UserPermission
 
 
 class User(Base):
@@ -20,5 +15,10 @@ class User(Base):
     is_globally_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     blocked_by: Mapped[uuid.UUID | None] = mapped_column(default=None, nullable=True)
 
-    role: Mapped["Role"] = relationship(back_populates="users")
-    permissions: Mapped["UserPermission"] = relationship(back_populates="user")
+    role = relationship("Role", back_populates="users")
+
+    permissions = relationship(
+        "Permission",
+        secondary="user_permissions",
+        back_populates="users",
+    )

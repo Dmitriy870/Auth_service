@@ -4,11 +4,21 @@ from sqlalchemy.future import select
 
 from roles.enums import RoleEnum
 from roles.models import Role
-from users.enums import ActionEnum, ExpireTimeEnum
-from users.exceptions import UserHTTPException
+from users.exceptions import (
+    AlreadyConfirmedException,
+    AlreadyRegisteredException,
+    NotFoundException,
+    ServerErrorException,
+)
 from users.models import User
 from users.schemas import UserCreate, UserResponse
-from users.utils import generate_token, hash_password, send_action_email, verify_token
+from users.utils import (
+    generate_token,
+    hash_password,
+    send_confirmation_email,
+    send_password_reset_email,
+    verify_token,
+)
 
 
 async def register_user(user_data: UserCreate, session: AsyncSession) -> UserResponse:
@@ -21,7 +31,7 @@ async def register_user(user_data: UserCreate, session: AsyncSession) -> UserRes
         db_user = result.scalars().first()
 
         if db_user:
-            raise UserHTTPException.email_already_registered
+            raise AlreadyRegisteredException("User with this email already exists.")
 
         hashed_password = hash_password(user_data.password)
 
@@ -39,38 +49,29 @@ async def register_user(user_data: UserCreate, session: AsyncSession) -> UserRes
         await session.commit()
         await session.refresh(user)
 
-        token = generate_token(
-            user.id, ActionEnum.CONFIRMATION.value, ExpireTimeEnum.CONFIRMATION.value
-        )
-        send_action_email(
-            email=user.email,
-            token=token,
-            action=ActionEnum.CONFIRMATION.value,
-        )
+        token = generate_token(user.id, "confirmation")
+        send_confirmation_email(email=user.email, token=token)
 
         return UserResponse.model_validate(user)
 
     except NoResultFound:
-        raise UserHTTPException.server_error
+        raise ServerErrorException("An error occurred while registering the user.")
 
 
-async def confirm_user(
-    token: str,
-    session: AsyncSession,
-) -> UserResponse:
+async def confirm_user(token: str, session: AsyncSession) -> UserResponse:
     """
     Confirms a user using the provided token.
     """
-    user_id = verify_token(token, ActionEnum.CONFIRMATION.value)
+    user_id = verify_token(token, "confirmation")
     stmt = select(User).where(User.id == user_id)
     result = await session.execute(stmt)
     user: User = result.scalars().first()
 
     if not user:
-        raise UserHTTPException.user_not_found
+        raise NotFoundException("User not found.")
 
     if user.is_approved:
-        raise UserHTTPException.user_already_confirmed
+        raise AlreadyConfirmedException("User already confirmed.")
 
     user.is_approved = True
     await session.commit()
@@ -86,19 +87,13 @@ async def resend_confirmation_email(email: str, session: AsyncSession) -> dict:
     user: User = result.scalars().first()
 
     if not user:
-        raise UserHTTPException.user_not_found
+        raise NotFoundException("User not found.")
 
     if user.is_approved:
-        raise UserHTTPException.user_already_confirmed
+        raise AlreadyConfirmedException("User already confirmed.")
 
-    token = generate_token(
-        user.id, ActionEnum.CONFIRMATION.value, ExpireTimeEnum.CONFIRMATION.value
-    )
-    send_action_email(
-        email=user.email,
-        token=token,
-        action=ActionEnum.CONFIRMATION.value,
-    )
+    token = generate_token(user.id, "confirmation")
+    send_confirmation_email(email=user.email, token=token)
 
     return {"detail": "Confirmation email sent."}
 
@@ -112,14 +107,10 @@ async def request_password_reset(email: str, session: AsyncSession) -> dict:
     user: User = result.scalars().first()
 
     if not user:
-        raise UserHTTPException.user_not_found
+        raise NotFoundException("User not found.")
 
-    token = generate_token(user.id, ActionEnum.RESET.value, ExpireTimeEnum.RESET.value)
-    send_action_email(
-        email=user.email,
-        token=token,
-        action=ActionEnum.RESET.value,
-    )
+    token = generate_token(user.id, "reset")
+    send_password_reset_email(email=user.email, token=token)
 
     return {"detail": "Password reset email successfully sent."}
 
@@ -128,14 +119,14 @@ async def reset_password(token: str, new_password: str, session: AsyncSession) -
     """
     Resets the user's password using the provided token.
     """
-    user_id = verify_token(token, ActionEnum.RESET.value)
+    user_id = verify_token(token, "reset")
 
     stmt = select(User).where(User.id == user_id)
     result = await session.execute(stmt)
     user: User = result.scalars().first()
 
     if not user:
-        raise UserHTTPException.user_not_found
+        raise NotFoundException("User not found.")
 
     hashed_password = hash_password(new_password)
     user.password = hashed_password
