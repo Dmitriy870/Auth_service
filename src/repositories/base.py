@@ -34,7 +34,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType, Resp
 
     async def create(self, data: CreateSchemaType) -> ResponseSchemaType:
 
-        obj = self.model(**data.model_dump())  # Используем model_dump() вместо dict()
+        obj = self.model(**data.model_dump())
         self.uow.add(obj)
         await self.uow.flush()
         return self.response_schema.model_validate(obj)
