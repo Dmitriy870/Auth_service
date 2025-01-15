@@ -21,10 +21,10 @@ def send_email(
     elif not isinstance(recipients, list) or not all(isinstance(r, str) for r in recipients):
         raise ValueError("Recipients must be a list of strings or a single string.")
 
-    sender_email = email_config.host_user
-    sender_password = email_config.host_password
-    smtp_server = email_config.host
-    smtp_port = email_config.port
+    sender_email = email_config.HOST_USER
+    sender_password = email_config.HOST_PASSWORD
+    smtp_server = email_config.HOST
+    smtp_port = email_config.PORT
 
     message = MIMEMultipart()
     message["From"] = sender_email

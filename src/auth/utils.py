@@ -4,13 +4,13 @@ from uuid import UUID
 import bcrypt
 import jwt
 
-from config import BasicConfig, JWTConfig
-from send_email import send_email
-from users.exceptions import (
+from auth.exceptions import (
     InvalidActionException,
     InvalidTokenException,
     TokenExpiredException,
 )
+from config import BasicConfig, JWTConfig
+from send_email import send_email
 
 jwt_config = JWTConfig()
 basic_config = BasicConfig()
@@ -53,7 +53,7 @@ def verify_token(token: str, action: str) -> UUID:
 
 def send_confirmation_email(email: str | list[str], token: str):
     """Sends an email for email confirmation."""
-    url = f"{basic_config.url}/confirm-email?token={token}"
+    url = f"{basic_config.URL}/confirm-email?token={token}"
     subject = "Email Confirmation"
     body = f"Click the link to confirm your email: {url}"
     send_email(subject=subject, body=body, recipients=email)
@@ -61,7 +61,7 @@ def send_confirmation_email(email: str | list[str], token: str):
 
 def send_password_reset_email(email: str | list[str], token: str):
     """Sends an email for password reset."""
-    url = f"{basic_config.url}/reset-password/confirm?token={token}"
+    url = f"{basic_config.URL}/reset-password/confirm?token={token}"
     subject = "Password Reset"
     body = f"Click the link to reset your password: {url}"
     send_email(subject=subject, body=body, recipients=email)

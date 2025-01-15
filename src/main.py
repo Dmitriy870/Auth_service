@@ -3,10 +3,10 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 
+from auth.router import router as auth_router
 from config import VersionConfig
-from database.dependencies import get_database_helper, get_settings
-from models.models import Base
-from users import router as users_router
+from database import get_database_helper, get_settings
+from models import Base
 
 version_config = VersionConfig()
 
@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-app.include_router(users_router, prefix=version_config.api_v1_prefix)
+app.include_router(auth_router, prefix=version_config.API_V1_PREFIX)
 
 if __name__ == "__main__":
     uvicorn.run("main:app", reload=True)
