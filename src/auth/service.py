@@ -174,3 +174,15 @@ class UserService:
         await self.uow.session.commit()
 
         return {"detail": "Password successfully reset."}
+
+    async def get_all_user(
+        self, page: int, page_size: int, sort_by: str | None, order: str | None, role: str | None
+    ):
+        users, total = await self.uow.users.get_all_paginated(page, page_size, sort_by, order, role)
+        return {
+            "users": users,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total // page_size) + (1 if total % page_size > 0 else 0),
+        }

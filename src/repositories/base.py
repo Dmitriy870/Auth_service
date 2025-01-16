@@ -2,6 +2,7 @@ from typing import Generic, Optional, Type, TypeVar
 from uuid import UUID
 
 from pydantic import BaseModel
+from sqlalchemy import asc, desc, func
 from sqlalchemy.future import select
 from sqlalchemy.orm import DeclarativeBase
 
@@ -30,7 +31,36 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType, Resp
 
         stmt = select(self.model)
         result = await self.uow.execute(stmt)
-        return [self.response_schema.model_validate(obj) for obj in result.scalars().all()]
+        return [self.response_schema.model_validate(obj) for obj in result.scalars().unique().all()]
+
+    async def get_all_paginated(
+        self, page: int, page_size: int, sort_by: str | None, order: str | None, role: str | None
+    ) -> list[ResponseSchemaType]:
+        stmt = select(self.model)
+
+        if role:
+            stmt = stmt.where(self.model.role.has(name=role))
+
+        if sort_by:
+            sort_column = getattr(self.model, sort_by, None)
+            if sort_column is not None:
+                stmt = stmt.order_by(asc(sort_column) if order == "asc" else desc(sort_column))
+
+        offset = (page - 1) * page_size
+        stmt = stmt.offset(offset).limit(page_size)
+
+        result = await self.uow.execute(stmt)
+        users = [
+            self.response_schema.model_validate(obj) for obj in result.scalars().unique().all()
+        ]
+
+        total_stmt = select(func.count(self.model.id))
+        if role:
+            total_stmt = total_stmt.where(self.model.role.has(name=role))
+        total_result = await self.uow.execute(total_stmt)
+        total = total_result.scalar_one()
+
+        return users, total
 
     async def create(self, data: CreateSchemaType) -> ResponseSchemaType:
 

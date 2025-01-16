@@ -84,3 +84,15 @@ async def reset_password_endpoint(
 @router.get("/users/protected")
 async def some_protected_route(current_user: CurrentUser):
     return {"message": f"Hello, {current_user.username}"}
+
+
+@router.get("/users/all")
+async def all_route(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    sort_by: str = Query(None, regex="^(created_at|username|role)$"),
+    order: str = Query("asc", regex="^(asc|desc)$"),
+    role: str = Query(None),
+    service: UserService = Depends(get_user_service),
+):
+    return await service.get_all_user(page, page_size, sort_by, order, role)
