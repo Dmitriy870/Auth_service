@@ -89,9 +89,17 @@ class InvalidTokenException(BaseHTTPException):
         )
 
 
-class InvalidActionException(BaseHTTPException):
+class InvalidRoleException(BaseHTTPException):
     def __init__(self, message: Optional[str] = None) -> None:
         super().__init__(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid action" if message is None else message,
+            detail="Invalid role" if message is None else message,
+        )
+
+
+class PermissionDeniedException(BaseHTTPException):
+    def __init__(self, message: Optional[str] = None) -> None:
+        super().__init__(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Permission denied" if message is None else message,
         )

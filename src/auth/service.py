@@ -1,4 +1,5 @@
 from cryptography.fernet import InvalidToken
+from pydantic import EmailStr
 from redis.asyncio import Redis
 
 from auth.enums import RoleEnum
@@ -176,7 +177,12 @@ class UserService:
         return {"detail": "Password successfully reset."}
 
     async def get_all_user(
-        self, page: int, page_size: int, sort_by: str | None, order: str | None, role: str | None
+        self,
+        page: int,
+        page_size: int,
+        sort_by: str | None,
+        order: str | None,
+        role: str | None,
     ):
         users, total = await self.uow.users.get_all_paginated(page, page_size, sort_by, order, role)
         return {
@@ -186,3 +192,9 @@ class UserService:
             "page_size": page_size,
             "total_pages": (total // page_size) + (1 if total % page_size > 0 else 0),
         }
+
+    async def get_all_roles(self):
+        return await self.uow.roles.get_all()
+
+    async def update_users_role(self, email: EmailStr, role: str):
+        return await self.uow.users.update_user_role(email, role)

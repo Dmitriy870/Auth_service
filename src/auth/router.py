@@ -1,7 +1,13 @@
 from fastapi import APIRouter, Depends, Form, Header, Query, status
+from pydantic import EmailStr
 from redis.asyncio import Redis
 
-from auth.dependencies import CurrentUser, get_redis_client, get_user_service
+from auth.dependencies import (
+    CurrentAdmin,
+    CurrentUser,
+    get_redis_client,
+    get_user_service,
+)
 from auth.schemas import LoginRequest, TokensResponse, UserCreate, UserResponse
 from auth.service import UserService
 
@@ -11,7 +17,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 @router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     username: str = Form(...),
-    email: str = Form(...),
+    email: EmailStr = Form(...),
     password: str = Form(...),
     service: UserService = Depends(get_user_service),
     redis_client: Redis = Depends(get_redis_client),
@@ -23,7 +29,7 @@ async def register(
 
 @router.post("/users/token", response_model=TokensResponse, status_code=status.HTTP_200_OK)
 async def get_token(
-    email: str = Form(...),
+    email: EmailStr = Form(...),
     password: str = Form(...),
     service: UserService = Depends(get_user_service),
 ):
@@ -52,7 +58,7 @@ async def confirm_email(
 
 @router.post("/users/resend-confirmation", status_code=status.HTTP_200_OK)
 async def resend_confirmation(
-    email: str = Form(...),
+    email: EmailStr = Form(...),
     service: UserService = Depends(get_user_service),
     redis_client: Redis = Depends(get_redis_client),
 ):
@@ -62,7 +68,7 @@ async def resend_confirmation(
 
 @router.post("/users/password-reset", status_code=status.HTTP_200_OK)
 async def request_reset(
-    email: str = Form(...),
+    email: EmailStr = Form(...),
     service: UserService = Depends(get_user_service),
     redis_client: Redis = Depends(get_redis_client),
 ):
@@ -81,13 +87,14 @@ async def reset_password_endpoint(
     return await service.reset_password(code, new_password, encrypted_user_id, redis_client)
 
 
-@router.get("/users/protected")
-async def some_protected_route(current_user: CurrentUser):
+@router.get("/users/me")
+async def some_protected_route(current_user: CurrentAdmin):
     return {"message": f"Hello, {current_user.username}"}
 
 
 @router.get("/users/all")
-async def all_route(
+async def get_all_users(
+    current_user: CurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
     sort_by: str = Query(None, regex="^(created_at|username|role)$"),
@@ -96,3 +103,20 @@ async def all_route(
     service: UserService = Depends(get_user_service),
 ):
     return await service.get_all_user(page, page_size, sort_by, order, role)
+
+
+@router.get("/roles/all")
+async def get_all_roles(
+    current_user: CurrentUser, service: UserService = Depends(get_user_service)
+):
+    return await service.get_all_roles()
+
+
+@router.post("/user/admin/role")
+async def update_user_role(
+    email: EmailStr = Form(...),
+    role: str = Form(...),
+    current_admin=CurrentAdmin,
+    service: UserService = Depends(get_user_service),
+):
+    return await service.update_users_role(email, role)

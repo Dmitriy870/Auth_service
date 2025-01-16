@@ -31,10 +31,16 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType, Resp
 
         stmt = select(self.model)
         result = await self.uow.execute(stmt)
+
         return [self.response_schema.model_validate(obj) for obj in result.scalars().unique().all()]
 
     async def get_all_paginated(
-        self, page: int, page_size: int, sort_by: str | None, order: str | None, role: str | None
+        self,
+        page: int,
+        page_size: int,
+        sort_by: str | None,
+        order: str | None,
+        role: str | None,
     ) -> list[ResponseSchemaType]:
         stmt = select(self.model)
 
