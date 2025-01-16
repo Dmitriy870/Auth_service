@@ -58,7 +58,7 @@ class AlreadyConfirmedException(BaseHTTPException):
 class InvalidOrExpiredTokenException(BaseHTTPException):
     def __init__(self, message: Optional[str] = None) -> None:
         super().__init__(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token" if message is None else message,
         )
 

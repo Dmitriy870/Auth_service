@@ -41,17 +41,25 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType, Resp
 
     async def update(self, data: UpdateSchemaType) -> Optional[ResponseSchemaType]:
 
-        obj = await self.get_by_id(data.id)
+        stmt = select(self.model).where(self.model.id == data.id)
+        result = await self.uow.execute(stmt)
+        obj = result.scalars().first()
+
         if obj:
             for key, value in data.model_dump(exclude_unset=True).items():
                 setattr(obj, key, value)
+
             await self.uow.flush()
+
             return self.response_schema.model_validate(obj)
+
         return None
 
     async def delete(self, entity_id: UUID) -> bool:
 
-        obj = await self.get_by_id(entity_id)
+        stmt = select(self.model).where(self.model.id == entity_id)
+        result = await self.uow.execute(stmt)
+        obj = result.scalars().first()
         if obj:
             await self.uow.delete(obj)
             await self.uow.flush()

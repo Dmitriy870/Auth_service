@@ -1,6 +1,7 @@
-from fastapi import Response
+from cryptography.fernet import InvalidToken
+from redis.asyncio import Redis
 
-from auth.enums import ActionEnum, RoleEnum
+from auth.enums import RoleEnum
 from auth.exceptions import (
     AlreadyConfirmedException,
     AlreadyRegisteredException,
@@ -10,9 +11,19 @@ from auth.exceptions import (
     TokenExpiredException,
     UnauthorizedException,
 )
-from auth.schemas import LoginRequest, TokensResponse, UserCreate, UserResponse
+from auth.schemas import (
+    LoginRequest,
+    TokensResponse,
+    UserConfirm,
+    UserCreate,
+    UserResponse,
+    UserUpdatePassword,
+)
 from auth.utils import (
-    generate_token,
+    decrypt_user_id,
+    encrypt_user_id,
+    generate_code,
+    generate_tokens,
     hash_password,
     send_confirmation_email,
     send_password_reset_email,
@@ -22,136 +33,144 @@ from auth.utils import (
 from repositories.uow import UnitOfWork
 
 
-async def register_user(user_data: UserCreate, uow: UnitOfWork) -> UserResponse:
-    user_repo = uow.users
+class UserService:
+    def __init__(self, uow: UnitOfWork):
+        self.uow = uow
 
-    existing_user = await user_repo.get_user_by_email(user_data.email)
-    if existing_user:
-        raise AlreadyRegisteredException("User with this email already exists.")
+    async def register_user(self, user_data: UserCreate, redis_client: Redis) -> UserResponse:
+        existing_user = await self.uow.users.get_user_by_email(user_data.email)
+        if existing_user:
+            raise AlreadyRegisteredException("User with this email already exists.")
 
-    existing_user = await user_repo.get_user_by_username(user_data.username)
-    if existing_user:
-        raise AlreadyRegisteredException("Username already exists.")
+        existing_user = await self.uow.users.get_user_by_username(user_data.username)
+        if existing_user:
+            raise AlreadyRegisteredException("Username already exists.")
 
-    hashed_password = hash_password(user_data.password)
-    user_data.password = hashed_password
+        hashed_password = hash_password(user_data.password)
+        user_data.password = hashed_password
 
-    role_repo = uow.roles
-    role = await role_repo.get_role_by_name(RoleEnum.USER.value)
-    if not role:
-        raise ServerErrorException("Role not found.")
+        role = await self.uow.roles.get_role_by_name(RoleEnum.USER.value)
+        if not role:
+            raise ServerErrorException("Role not found.")
 
-    user_data.role_id = role.id
+        user_data.role_id = role.id
+        user = await self.uow.users.create(user_data)
 
-    user = await user_repo.create(user_data)
+        code = generate_code()
+        encrypted_user_id = encrypt_user_id(str(user.id))
 
-    token = generate_token(user.id, ActionEnum.CONFIRMATION.value)
-    send_confirmation_email(email=user.email, token=token)
+        send_confirmation_email(email=user.email, code=code, encrypted_user_id=encrypted_user_id)
 
-    await uow.commit()
-    return user
+        await redis_client.set(f"email_confirm: {code}", str(user.id), ex=900)
 
+        await self.uow.commit()
+        return user
 
-async def login_user(data: LoginRequest, uow: UnitOfWork, response: Response) -> TokensResponse:
-    user_repo = uow.users
+    async def login_user(self, data: LoginRequest) -> TokensResponse:
+        user = await self.uow.users.get_user_by_email(data.email)
+        if not user:
+            raise NotFoundException("User not found.")
 
-    user = await user_repo.get_user_by_email(data.email)
-    if not user:
-        raise NotFoundException("User not found.")
+        if not verify_password(data.password, user.password):
+            raise UnauthorizedException("Invalid email or password.")
 
-    if not verify_password(data.password, user.password):
-        raise UnauthorizedException("Invalid email or password.")
+        tokens = generate_tokens(user.id)
+        return tokens
 
-    access_token = generate_token(user.id, ActionEnum.ACCESS.value)
-    refresh_token = generate_token(user.id, ActionEnum.REFRESH.value)
+    async def refresh_access_token(self, refresh_token: str) -> TokensResponse:
+        try:
+            user_id = verify_token(refresh_token)
+        except TokenExpiredException:
+            raise TokenExpiredException("Refresh token has expired.")
+        except InvalidTokenException:
+            raise InvalidTokenException("Invalid refresh token.")
 
-    response.headers["Authorization"] = f"Bearer {access_token}"
-    response.headers["Refresh-Token"] = refresh_token
+        tokens = generate_tokens(user_id)
+        return tokens
 
-    return TokensResponse(
-        access_token=access_token, refresh_token=refresh_token, token_type="bearer"
-    )
+    async def confirm_user(
+        self, code: str, encrypted_user_id: str, redis_client: Redis
+    ) -> UserResponse:
+        try:
+            user_id_from_query = decrypt_user_id(encrypted_user_id)
+        except InvalidToken:
+            raise UnauthorizedException("Invalid user identifier.")
+        except ValueError:
+            raise UnauthorizedException("Malformed user identifier.")
 
+        user_id_from_redis = await redis_client.get(f"email_confirm: {code}")
+        if not user_id_from_redis:
+            raise UnauthorizedException("Invalid or expired confirmation code.")
 
-async def refresh_access_token(
-    refresh_token: str, uow: UnitOfWork, response: Response
-) -> TokensResponse:
-    try:
-        user_id = verify_token(refresh_token, ActionEnum.REFRESH.value)
-    except TokenExpiredException:
-        raise TokenExpiredException("Token expired.")
-    except InvalidTokenException:
-        raise InvalidTokenException("Token invalid.")
+        if user_id_from_redis != str(user_id_from_query):
+            raise UnauthorizedException("Invalid user identifier.")
 
-    user_repo = uow.users
-    user = await user_repo.get_by_id(user_id)
-    if not user:
-        raise NotFoundException("User not found.")
+        user_confirm = UserConfirm(id=user_id_from_query, is_approved=True)
 
-    new_access_token = generate_token(user.id, ActionEnum.ACCESS.value)
+        user = await self.uow.users.update(user_confirm)
 
-    response.headers["Authorization"] = f"Bearer {new_access_token}"
+        await self.uow.commit()
 
-    return TokensResponse(access_token=new_access_token, refresh_token=None, token_type="bearer")
+        await redis_client.delete(f"email_confirm: {code}")
 
+        return user
 
-async def confirm_user(token: str, uow: UnitOfWork) -> UserResponse:
-    user_repo = uow.users
+    async def resend_confirmation_email(self, email: str, redis_client: Redis) -> dict:
+        user = await self.uow.users.get_user_by_email(email)
+        if not user:
+            raise NotFoundException("User not found.")
 
-    user_id = verify_token(token, ActionEnum.CONFIRMATION.value)
+        if user.is_approved:
+            raise AlreadyConfirmedException("User already confirmed.")
 
-    user = await user_repo.get_user_by_id(user_id)
-    if not user:
-        raise NotFoundException("User not found.")
+        code = generate_code()
+        encrypted_user_id = encrypt_user_id(str(user.id))
 
-    if user.is_approved:
-        raise AlreadyConfirmedException("User already confirmed.")
+        send_confirmation_email(email=user.email, code=code, encrypted_user_id=encrypted_user_id)
 
-    user.is_approved = True
-    await uow.commit()
-    return user
+        await redis_client.set(f"email_confirm: {code}", str(user.id), ex=900)
 
+        return {"detail": "Confirmation email sent."}
 
-async def resend_confirmation_email(email: str, uow: UnitOfWork) -> dict:
-    user_repo = uow.users
+    async def request_password_reset(self, email: str, redis_client: Redis) -> dict:
+        user = await self.uow.users.get_user_by_email(email)
+        if not user:
+            raise NotFoundException("User not found.")
 
-    user = await user_repo.get_user_by_email(email)
-    if not user:
-        raise NotFoundException("User not found.")
+        code = generate_code()
+        encrypted_user_id = encrypt_user_id(str(user.id))
 
-    if user.is_approved:
-        raise AlreadyConfirmedException("User already confirmed.")
+        send_password_reset_email(email=user.email, code=code, encrypted_user_id=encrypted_user_id)
 
-    token = generate_token(user.id, ActionEnum.CONFIRMATION.value)
-    send_confirmation_email(email=user.email, token=token)
+        await redis_client.set(f"password_reset: {code}", str(user.id), ex=900)
 
-    return {"detail": "Confirmation email sent."}
+        return {"detail": "Password reset email successfully sent."}
 
+    async def reset_password(
+        self, code: str, new_password: str, encrypted_user_id: str, redis_client: Redis
+    ) -> dict:
+        try:
+            user_id_from_query = decrypt_user_id(encrypted_user_id)
+        except InvalidToken:
+            raise UnauthorizedException("Invalid user identifier.")
+        except ValueError:
+            raise UnauthorizedException("Malformed user identifier.")
 
-async def request_password_reset(email: str, uow: UnitOfWork) -> dict:
-    user_repo = uow.users
+        user_id_from_redis = await redis_client.get(f"password_reset: {code}")
+        if not user_id_from_redis:
+            raise UnauthorizedException("Invalid or expired reset code.")
 
-    user = await user_repo.get_user_by_email(email)
-    if not user:
-        raise NotFoundException("User not found.")
+        if str(user_id_from_redis) != str(user_id_from_query):
+            raise UnauthorizedException("Invalid user identifier.")
 
-    token = generate_token(user.id, ActionEnum.RESET.value)
-    send_password_reset_email(email=user.email, token=token)
+        hashed_password = hash_password(new_password)
 
-    return {"detail": "Password reset email successfully sent."}
+        update_pass = UserUpdatePassword(id=user_id_from_query, password=hashed_password)
 
+        await self.uow.users.update(update_pass)
 
-async def reset_password(token: str, new_password: str, uow: UnitOfWork) -> dict:
-    user_repo = uow.users
+        await redis_client.delete(f"password_reset: {code}")
 
-    user_id = verify_token(token, ActionEnum.RESET.value)
+        await self.uow.session.commit()
 
-    user = await user_repo.get_user_by_id(user_id)
-    if not user:
-        raise NotFoundException("User not found.")
-
-    hashed_password = hash_password(new_password)
-    user.password = hashed_password
-
-    await uow.commit()
-    return {"detail": "Password successfully reset."}
+        return {"detail": "Password successfully reset."}

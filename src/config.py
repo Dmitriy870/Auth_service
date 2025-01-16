@@ -1,4 +1,5 @@
-from pydantic import Field, PostgresDsn, RedisDsn
+from cryptography.fernet import Fernet
+from pydantic import Field, PostgresDsn, RedisDsn, validator
 from pydantic_settings import BaseSettings
 
 
@@ -6,6 +7,7 @@ class JWTConfig(BaseSettings):
     SECRET_KEY: str = Field(...)
     ALGORITHM: str = Field(default="HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=15)
+    REFRESH_TOKEN_EXPIRE: int = Field(default=60)
 
     class Config:
         env_prefix = "JWT_"
@@ -72,3 +74,20 @@ class VersionConfig(BaseSettings):
 
 class DBSettings(PostgresConfig):
     ECHO: bool = True
+
+
+class EncryptionConfig(BaseSettings):
+    KEY: str = Field(...)
+
+    @validator("KEY")
+    def validate_key(cls, value: str) -> bytes:
+        try:
+            key_bytes = value.encode()
+            Fernet(key_bytes)
+            return key_bytes
+        except Exception as e:
+            raise ValueError(f"Invalid Fernet key: {e}")
+
+    class Config:
+        env_prefix = "ENCRYPTION_"
+        case_sensitive = False

@@ -20,6 +20,16 @@ class UserUpdate(BaseModel):
     password: str | None = None
 
 
+class UserUpdatePassword(BaseModel):
+    id: UUID
+    password: str
+
+
+class UserConfirm(BaseModel):
+    id: UUID
+    is_approved: bool
+
+
 class UserResponse(UserCreate):
     id: UUID
     created_at: datetime

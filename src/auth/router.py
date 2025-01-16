@@ -1,20 +1,9 @@
-from uuid import UUID
+from fastapi import APIRouter, Depends, Form, Header, Query, status
+from redis.asyncio import Redis
 
-from fastapi import APIRouter, Depends, Form, Header, Query, Response, status
-
-from auth.dependencies import get_current_user
+from auth.dependencies import CurrentUser, get_redis_client, get_user_service
 from auth.schemas import LoginRequest, TokensResponse, UserCreate, UserResponse
-from auth.service import (
-    confirm_user,
-    login_user,
-    refresh_access_token,
-    register_user,
-    request_password_reset,
-    resend_confirmation_email,
-    reset_password,
-)
-from database import get_unit_of_work
-from repositories.uow import UnitOfWork
+from auth.service import UserService
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -24,70 +13,74 @@ async def register(
     username: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
-    uow: UnitOfWork = Depends(get_unit_of_work),
+    service: UserService = Depends(get_user_service),
+    redis_client: Redis = Depends(get_redis_client),
 ):
     email = email.lower().strip()
     user_data = UserCreate(username=username, email=email, password=password)
-    return await register_user(user_data, uow)
+    return await service.register_user(user_data, redis_client)
 
 
 @router.post("/users/token", response_model=TokensResponse, status_code=status.HTTP_200_OK)
 async def get_token(
     email: str = Form(...),
     password: str = Form(...),
-    uow: UnitOfWork = Depends(get_unit_of_work),
-    response: Response = None,
+    service: UserService = Depends(get_user_service),
 ):
     data = LoginRequest(email=email, password=password)
-    return await login_user(data, uow, response)
+    return await service.login_user(data)
 
 
 @router.post("/users/refresh", response_model=TokensResponse, status_code=status.HTTP_200_OK)
 async def refresh_token(
     refresh_token: str = Header(..., alias="Refresh-Token"),
-    uow: UnitOfWork = Depends(get_unit_of_work),
-    response: Response = None,
+    service: UserService = Depends(get_user_service),
 ):
-    return await refresh_access_token(refresh_token, uow, response)
+    return await service.refresh_access_token(refresh_token)
 
 
 @router.get("/users/confirm", status_code=status.HTTP_200_OK)
 async def confirm_email(
-    token: str,
-    uow: UnitOfWork = Depends(get_unit_of_work),
+    code: str = Query(...),
+    encrypted_user_id: str = Query(...),
+    service: UserService = Depends(get_user_service),
+    redis_client: Redis = Depends(get_redis_client),
 ):
-    user = await confirm_user(token, uow)
+    user = await service.confirm_user(code, encrypted_user_id, redis_client)
     return {"detail": "Email confirmed successfully.", "user": user}
 
 
 @router.post("/users/resend-confirmation", status_code=status.HTTP_200_OK)
 async def resend_confirmation(
     email: str = Form(...),
-    uow: UnitOfWork = Depends(get_unit_of_work),
+    service: UserService = Depends(get_user_service),
+    redis_client: Redis = Depends(get_redis_client),
 ):
     email = email.lower().strip()
-    return await resend_confirmation_email(email, uow)
+    return await service.resend_confirmation_email(email, redis_client)
 
 
 @router.post("/users/password-reset", status_code=status.HTTP_200_OK)
 async def request_reset(
     email: str = Form(...),
-    uow: UnitOfWork = Depends(get_unit_of_work),
+    service: UserService = Depends(get_user_service),
+    redis_client: Redis = Depends(get_redis_client),
 ):
     email = email.lower().strip()
-    return await request_password_reset(email, uow)
+    return await service.request_password_reset(email, redis_client)
 
 
 @router.post("/users/password-reset/confirm", status_code=status.HTTP_200_OK)
 async def reset_password_endpoint(
-    token: str = Query(...),
+    code: str = Query(...),
+    encrypted_user_id: str = Query(...),
     new_password: str = Form(...),
-    uow: UnitOfWork = Depends(get_unit_of_work),
+    service: UserService = Depends(get_user_service),
+    redis_client: Redis = Depends(get_redis_client),
 ):
-    return await reset_password(token, new_password, uow)
+    return await service.reset_password(code, new_password, encrypted_user_id, redis_client)
 
 
 @router.get("/users/protected")
-async def some_protected_route(current_user_id: UUID = Depends(get_current_user)):
-    # current_user_id — это тот, кто сейчас залогинен
-    return {"message": "Hello, your user_id is " + str(current_user_id)}
+async def some_protected_route(current_user: CurrentUser):
+    return {"message": f"Hello, {current_user.username}"}

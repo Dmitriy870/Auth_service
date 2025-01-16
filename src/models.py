@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, func
+from sqlalchemy import DateTime
 from sqlalchemy.orm import DeclarativeBase, Mapped, declared_attr, mapped_column
 
 
@@ -13,9 +13,12 @@ class Base(DeclarativeBase):
         return cls.__name__.lower()
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=True
+        DateTime, default=lambda: datetime.utcnow().replace(tzinfo=None)
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), onupdate=func.now(), nullable=True
+        DateTime,
+        default=lambda: datetime.utcnow().replace(tzinfo=None),
+        onupdate=lambda: datetime.utcnow().replace(tzinfo=None),
     )

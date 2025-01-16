@@ -12,12 +12,13 @@ from models import Base
 class Role(Base):
     name: Mapped[RoleEnum] = mapped_column(sqlalchemy_Enum(RoleEnum), nullable=False, unique=True)
 
-    users = relationship("User", back_populates="role")
+    users = relationship("User", back_populates="role", lazy="selectin")
 
     permissions = relationship(
         "Permission",
         secondary="role_permissions",
         back_populates="roles",
+        lazy="joined",
     )
 
 
@@ -30,12 +31,13 @@ class User(Base):
     is_globally_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     blocked_by: Mapped[uuid.UUID | None] = mapped_column(default=None, nullable=True)
 
-    role = relationship("Role", back_populates="users")
+    role = relationship("Role", back_populates="users", lazy="joined")
 
     permissions = relationship(
         "Permission",
         secondary="user_permissions",
         back_populates="users",
+        lazy="joined",
     )
 
 
@@ -48,12 +50,14 @@ class Permission(Base):
         "Role",
         secondary="role_permissions",
         back_populates="permissions",
+        lazy="joined",
     )
 
     users = relationship(
         "User",
         secondary="user_permissions",
         back_populates="permissions",
+        lazy="selectin",
     )
 
 
