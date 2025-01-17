@@ -100,6 +100,6 @@ class InvalidRoleException(BaseHTTPException):
 class PermissionDeniedException(BaseHTTPException):
     def __init__(self, message: Optional[str] = None) -> None:
         super().__init__(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied" if message is None else message,
         )

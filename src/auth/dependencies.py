@@ -32,7 +32,7 @@ async def get_current_user(
     try:
         user_id = verify_token(token)
     except (InvalidTokenException, TokenExpiredException):
-        raise InvalidOrExpiredTokenException
+        raise InvalidOrExpiredTokenException("You have invalid or expired token")
 
     user = await uow.users.get_by_id(user_id)
     if not user:
@@ -53,13 +53,16 @@ async def get_current_admin(current_user: CurrentUser, uow: UnitOfWork = Depends
 CurrentAdmin = Annotated[UserResponse, Depends(get_current_admin)]
 
 
-async def get_user_service(uow: UnitOfWork = Depends(get_unit_of_work)) -> UserService:
-    return UserService(uow)
-
-
 async def get_redis_client() -> Redis:
     client = Redis.from_url(str(redis_config.URL), decode_responses=True)
     try:
         yield client
     finally:
         await client.close()
+
+
+async def get_user_service(
+    uow: UnitOfWork = Depends(get_unit_of_work),
+    redis_client: Redis = Depends(get_redis_client),
+) -> UserService:
+    return UserService(uow, redis_client)

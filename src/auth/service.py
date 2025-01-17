@@ -1,5 +1,4 @@
 from cryptography.fernet import InvalidToken
-from pydantic import EmailStr
 from redis.asyncio import Redis
 
 from auth.enums import RoleEnum
@@ -35,10 +34,11 @@ from repositories.uow import UnitOfWork
 
 
 class UserService:
-    def __init__(self, uow: UnitOfWork):
+    def __init__(self, uow: UnitOfWork, redis_client: Redis):
         self.uow = uow
+        self.redis_client = redis_client
 
-    async def register_user(self, user_data: UserCreate, redis_client: Redis) -> UserResponse:
+    async def register_user(self, user_data: UserCreate) -> UserResponse:
         existing_user = await self.uow.users.get_user_by_email(user_data.email)
         if existing_user:
             raise AlreadyRegisteredException("User with this email already exists.")
@@ -62,7 +62,7 @@ class UserService:
 
         send_confirmation_email(email=user.email, code=code, encrypted_user_id=encrypted_user_id)
 
-        await redis_client.set(f"email_confirm: {code}", str(user.id), ex=900)
+        await self.redis_client.set(f"email_confirm: {code}", str(user.id), ex=900)
 
         await self.uow.commit()
         return user
@@ -89,9 +89,7 @@ class UserService:
         tokens = generate_tokens(user_id)
         return tokens
 
-    async def confirm_user(
-        self, code: str, encrypted_user_id: str, redis_client: Redis
-    ) -> UserResponse:
+    async def confirm_user(self, code: str, encrypted_user_id: str) -> UserResponse:
         try:
             user_id_from_query = decrypt_user_id(encrypted_user_id)
         except InvalidToken:
@@ -99,7 +97,7 @@ class UserService:
         except ValueError:
             raise UnauthorizedException("Malformed user identifier.")
 
-        user_id_from_redis = await redis_client.get(f"email_confirm: {code}")
+        user_id_from_redis = await self.redis_client.get(f"email_confirm: {code}")
         if not user_id_from_redis:
             raise UnauthorizedException("Invalid or expired confirmation code.")
 
@@ -112,11 +110,11 @@ class UserService:
 
         await self.uow.commit()
 
-        await redis_client.delete(f"email_confirm: {code}")
+        await self.redis_client.delete(f"email_confirm: {code}")
 
         return user
 
-    async def resend_confirmation_email(self, email: str, redis_client: Redis) -> dict:
+    async def resend_confirmation_email(self, email: str) -> dict:
         user = await self.uow.users.get_user_by_email(email)
         if not user:
             raise NotFoundException("User not found.")
@@ -129,11 +127,11 @@ class UserService:
 
         send_confirmation_email(email=user.email, code=code, encrypted_user_id=encrypted_user_id)
 
-        await redis_client.set(f"email_confirm: {code}", str(user.id), ex=900)
+        await self.redis_client.set(f"email_confirm: {code}", str(user.id), ex=900)
 
         return {"detail": "Confirmation email sent."}
 
-    async def request_password_reset(self, email: str, redis_client: Redis) -> dict:
+    async def request_password_reset(self, email: str) -> dict:
         user = await self.uow.users.get_user_by_email(email)
         if not user:
             raise NotFoundException("User not found.")
@@ -143,13 +141,11 @@ class UserService:
 
         send_password_reset_email(email=user.email, code=code, encrypted_user_id=encrypted_user_id)
 
-        await redis_client.set(f"password_reset: {code}", str(user.id), ex=900)
+        await self.redis_client.set(f"password_reset: {code}", str(user.id), ex=900)
 
         return {"detail": "Password reset email successfully sent."}
 
-    async def reset_password(
-        self, code: str, new_password: str, encrypted_user_id: str, redis_client: Redis
-    ) -> dict:
+    async def reset_password(self, code: str, new_password: str, encrypted_user_id: str) -> dict:
         try:
             user_id_from_query = decrypt_user_id(encrypted_user_id)
         except InvalidToken:
@@ -157,7 +153,7 @@ class UserService:
         except ValueError:
             raise UnauthorizedException("Malformed user identifier.")
 
-        user_id_from_redis = await redis_client.get(f"password_reset: {code}")
+        user_id_from_redis = await self.redis_client.get(f"password_reset: {code}")
         if not user_id_from_redis:
             raise UnauthorizedException("Invalid or expired reset code.")
 
@@ -170,7 +166,7 @@ class UserService:
 
         await self.uow.users.update(update_pass)
 
-        await redis_client.delete(f"password_reset: {code}")
+        await self.redis_client.delete(f"password_reset: {code}")
 
         await self.uow.session.commit()
 
@@ -192,9 +188,3 @@ class UserService:
             "page_size": page_size,
             "total_pages": (total // page_size) + (1 if total % page_size > 0 else 0),
         }
-
-    async def get_all_roles(self):
-        return await self.uow.roles.get_all()
-
-    async def update_users_role(self, email: EmailStr, role: str):
-        return await self.uow.users.update_user_role(email, role)
