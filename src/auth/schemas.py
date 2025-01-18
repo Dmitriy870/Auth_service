@@ -18,7 +18,6 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     username: str | None = Field(None)
     email: EmailStr | None = Field(None)
-    password: str | None = Field(None)
 
 
 class UserUpdatePassword(BaseModel):
@@ -79,3 +78,7 @@ class PaginatedUserResponse(BaseModel):
     page: int = Field(...)
     page_size: int = Field(...)
     total_pages: int = Field(...)
+
+
+class SetFalse(BaseModel):
+    is_approved: bool = Field(False)

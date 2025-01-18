@@ -21,7 +21,7 @@ if config.config_file_name is not None:
 
 db_url = os.getenv("POSTGRES_URL")
 config.set_main_option("sqlalchemy.url", db_url)
-
+from auth.models import *
 from src.models import Base
 
 target_metadata = Base.metadata

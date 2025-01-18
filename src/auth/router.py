@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Form, Header, Query, status
 from pydantic import EmailStr
 
@@ -9,6 +11,7 @@ from auth.schemas import (
     TokensResponse,
     UserCreate,
     UserResponse,
+    UserUpdate,
 )
 from auth.service import UserService
 
@@ -116,3 +119,13 @@ async def update_user_role(
     service: UserService = Depends(get_user_service),
 ) -> UserResponse | None:
     return await service.uow.users.update_user_role(email, role)
+
+
+@router.patch("/users/{user_id}", response_model=UserResponse)
+async def update_user(
+    user_update: UserUpdate,
+    # current_user: CurrentUser,
+    user_id: UUID,
+    service: UserService = Depends(get_user_service),
+) -> UserResponse:
+    return await service.update_user(user_update, user_id)

@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from cryptography.fernet import InvalidToken
 from redis.asyncio import Redis
 
@@ -17,6 +19,7 @@ from auth.schemas import (
     UserConfirm,
     UserCreate,
     UserResponse,
+    UserUpdate,
     UserUpdatePassword,
 )
 from auth.utils import (
@@ -61,10 +64,9 @@ class UserService:
         encrypted_user_id = encrypt_user_id(str(user.id))
 
         send_confirmation_email(email=user.email, code=code, encrypted_user_id=encrypted_user_id)
-
         await self.redis_client.set(f"email_confirm: {code}", str(user.id), ex=900)
-
         await self.uow.commit()
+
         return user
 
     async def login_user(self, data: LoginRequest) -> TokensResponse:
@@ -105,11 +107,9 @@ class UserService:
             raise UnauthorizedException("Invalid user identifier.")
 
         user_confirm = UserConfirm(id=user_id_from_query, is_approved=True)
-
         user = await self.uow.users.update(user_confirm)
 
         await self.uow.commit()
-
         await self.redis_client.delete(f"email_confirm: {code}")
 
         return user
@@ -126,7 +126,6 @@ class UserService:
         encrypted_user_id = encrypt_user_id(str(user.id))
 
         send_confirmation_email(email=user.email, code=code, encrypted_user_id=encrypted_user_id)
-
         await self.redis_client.set(f"email_confirm: {code}", str(user.id), ex=900)
 
         return {"detail": "Confirmation email sent."}
@@ -140,7 +139,6 @@ class UserService:
         encrypted_user_id = encrypt_user_id(str(user.id))
 
         send_password_reset_email(email=user.email, code=code, encrypted_user_id=encrypted_user_id)
-
         await self.redis_client.set(f"password_reset: {code}", str(user.id), ex=900)
 
         return {"detail": "Password reset email successfully sent."}
@@ -161,24 +159,16 @@ class UserService:
             raise UnauthorizedException("Invalid user identifier.")
 
         hashed_password = hash_password(new_password)
-
         update_pass = UserUpdatePassword(id=user_id_from_query, password=hashed_password)
 
         await self.uow.users.update(update_pass)
-
         await self.redis_client.delete(f"password_reset: {code}")
-
         await self.uow.session.commit()
 
         return {"detail": "Password successfully reset."}
 
     async def get_all_user(
-        self,
-        page: int,
-        page_size: int,
-        sort_by: str | None,
-        order: str | None,
-        role: str | None,
+        self, page: int, page_size: int, sort_by: str | None, order: str | None, role: str | None
     ):
         users, total = await self.uow.users.get_all_paginated(page, page_size, sort_by, order, role)
         return {
@@ -188,3 +178,28 @@ class UserService:
             "page_size": page_size,
             "total_pages": (total // page_size) + (1 if total % page_size > 0 else 0),
         }
+
+    async def update_user(self, data: UserUpdate, user_id: UUID):
+        if data.email:
+            check_email = await self.uow.users.get_user_by_email(data.email)
+            if check_email:
+                raise AlreadyRegisteredException("User with this email already exists.")
+
+        user = await self.uow.users.get_by_id(user_id)
+        if user is None:
+            raise NotFoundException("User not found.")
+
+        email_db = user.email
+        user_update: UserUpdate = await self.uow.users.update(data, user_id)
+
+        if data.email and data.email.strip().lower() != email_db.strip().lower():
+            code = generate_code()
+            encrypted_user_id = encrypt_user_id(str(user.id))
+
+            send_confirmation_email(
+                email=user_update.email, code=code, encrypted_user_id=encrypted_user_id
+            )
+            user_update: UserResponse = await self.uow.users.set_false_email(user_id)
+            await self.redis_client.set(f"email_confirm: {code}", str(user_id), ex=900)
+
+        return user_update

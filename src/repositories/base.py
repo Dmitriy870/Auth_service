@@ -6,6 +6,8 @@ from sqlalchemy import asc, desc, func
 from sqlalchemy.future import select
 from sqlalchemy.orm import DeclarativeBase
 
+from auth.exceptions import NotFoundException
+
 ModelType = TypeVar("ModelType", bound=DeclarativeBase)
 CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)
 UpdateSchemaType = TypeVar("UpdateSchemaType", bound=BaseModel)
@@ -75,21 +77,24 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType, Resp
         await self.uow.flush()
         return self.response_schema.model_validate(obj)
 
-    async def update(self, data: UpdateSchemaType) -> Optional[ResponseSchemaType]:
+    async def update(
+        self, data: UpdateSchemaType, entity_id: UUID | None = None
+    ) -> Optional[ResponseSchemaType]:
 
-        stmt = select(self.model).where(self.model.id == data.id)
+        target_id = entity_id if entity_id else data.id
+        stmt = select(self.model).where(self.model.id == target_id)
         result = await self.uow.execute(stmt)
         obj = result.scalars().first()
 
-        if obj:
-            for key, value in data.model_dump(exclude_unset=True).items():
-                setattr(obj, key, value)
+        if not obj:
+            raise NotFoundException("Entity not found")
 
-            await self.uow.flush()
+        for key, value in data.model_dump(exclude_unset=True).items():
+            setattr(obj, key, value)
 
-            return self.response_schema.model_validate(obj)
+        await self.uow.flush()
 
-        return None
+        return self.response_schema.model_validate(obj)
 
     async def delete(self, entity_id: UUID) -> bool:
 
