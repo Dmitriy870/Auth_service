@@ -19,7 +19,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate, UserResponse])
         result = await self.uow.execute(stmt)
         user: User = result.scalars().first()
         if user:
-            return self.response_schema.model_validate(user)
+            return self.response_schema.model_validate(user, from_attributes=True)
         return None
 
     async def get_user_by_username(self, username: str) -> UserResponse | None:
@@ -27,7 +27,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate, UserResponse])
         result = await self.uow.execute(stmt)
         user: User = result.scalars().first()
         if user:
-            return self.response_schema.model_validate(user)
+            return self.response_schema.model_validate(user, from_attributes=True)
         return None
 
     async def update_user_role(self, email: EmailStr, role: str) -> UserResponse | None:
@@ -53,7 +53,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate, UserResponse])
         user.role = role_obj
         await self.uow.flush()
 
-        return self.response_schema.model_validate(user)
+        return self.response_schema.model_validate(user, from_attributes=True)
 
     async def set_false_email(self, user_id):
         stmt = select(self.model).where(self.model.id == user_id)
@@ -62,4 +62,4 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate, UserResponse])
 
         user.is_approved = False
         await self.uow.flush()
-        return self.response_schema.model_validate(user)
+        return self.response_schema.model_validate(user, from_attributes=True)

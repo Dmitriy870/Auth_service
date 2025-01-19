@@ -38,9 +38,6 @@ class UserResponse(UserCreate):
     is_globally_blocked: bool = Field(...)
     role_id: UUID = Field(...)
 
-    class Config:
-        from_attributes = True
-
 
 class RoleBase(BaseModel):
     id: UUID = Field(...)
@@ -49,9 +46,6 @@ class RoleBase(BaseModel):
 
 class RoleResponse(RoleBase):
     pass
-
-    class Config:
-        from_attributes = True
 
 
 class LoginRequest(BaseModel):
@@ -67,9 +61,6 @@ class TokensResponse(BaseModel):
     access_token: str = Field(...)
     refresh_token: str | None = Field(None)
     token_type: str = Field("bearer")
-
-    class Config:
-        from_attributes = True
 
 
 class PaginatedUserResponse(BaseModel):

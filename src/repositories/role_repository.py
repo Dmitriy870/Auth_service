@@ -14,5 +14,5 @@ class RoleRepository(BaseRepository[Role, None, None, RoleResponse]):
         result = await self.uow.execute(stmt)
         role = result.scalars().first()
         if role:
-            return self.response_schema.model_validate(role)
+            return self.response_schema.model_validate(role, from_attributes=True)
         return None

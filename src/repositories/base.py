@@ -26,7 +26,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType, Resp
         result = await self.uow.execute(stmt)
         obj = result.scalars().first()
         if obj:
-            return self.response_schema.model_validate(obj)
+            return self.response_schema.model_validate(obj, from_attributes=True)
         return None
 
     async def get_all(self) -> list[ResponseSchemaType]:
@@ -34,7 +34,10 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType, Resp
         stmt = select(self.model)
         result = await self.uow.execute(stmt)
 
-        return [self.response_schema.model_validate(obj) for obj in result.scalars().unique().all()]
+        return [
+            self.response_schema.model_validate(obj, from_attributes=True)
+            for obj in result.scalars().unique().all()
+        ]
 
     async def get_all_paginated(
         self,
@@ -59,7 +62,8 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType, Resp
 
         result = await self.uow.execute(stmt)
         users = [
-            self.response_schema.model_validate(obj) for obj in result.scalars().unique().all()
+            self.response_schema.model_validate(obj, from_attributes=True)
+            for obj in result.scalars().unique().all()
         ]
 
         total_stmt = select(func.count(self.model.id))
@@ -75,7 +79,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType, Resp
         obj = self.model(**data.model_dump())
         self.uow.add(obj)
         await self.uow.flush()
-        return self.response_schema.model_validate(obj)
+        return self.response_schema.model_validate(obj, from_attributes=True)
 
     async def update(
         self, data: UpdateSchemaType, entity_id: UUID | None = None
@@ -94,7 +98,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType, Resp
 
         await self.uow.flush()
 
-        return self.response_schema.model_validate(obj)
+        return self.response_schema.model_validate(obj, from_attributes=True)
 
     async def delete(self, entity_id: UUID) -> bool:
 

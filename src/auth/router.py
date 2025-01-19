@@ -124,8 +124,17 @@ async def update_user_role(
 @router.patch("/users/{user_id}", response_model=UserResponse)
 async def update_user(
     user_update: UserUpdate,
-    # current_user: CurrentUser,
+    current_user: CurrentUser,
     user_id: UUID,
     service: UserService = Depends(get_user_service),
 ) -> UserResponse:
     return await service.update_user(user_update, user_id)
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    current_user: CurrentUser, user_id: UUID, service: UserService = Depends(get_user_service)
+):
+    is_delete = await service.uow.users.delete(user_id)
+    if is_delete:
+        return {"detail": "User deleted successfully."}
