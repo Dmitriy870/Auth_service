@@ -4,6 +4,23 @@ from fastapi import APIRouter, Depends, Form, Header, Query, status
 from pydantic import EmailStr
 
 from auth.dependencies import CurrentAdmin, CurrentUser, get_user_service
+from auth.exceptions import (
+    AlreadyConfirmedException,
+    AlreadyRegisteredException,
+    AlreadyRegisteredHTTPException,
+    BadRequestException,
+    BadRequestHTTPException,
+    InvalidTokenException,
+    NotFoundException,
+    NotFoundHTTPException,
+    PermissionDeniedException,
+    PermissionDeniedHTTPException,
+    ServerErrorException,
+    ServerErrorHTTPException,
+    TokenExpiredException,
+    UnauthorizedException,
+    UnauthorizedHTTPException,
+)
 from auth.schemas import (
     LoginRequest,
     PaginatedUserResponse,
@@ -25,9 +42,14 @@ async def register(
     password: str = Form(...),
     service: UserService = Depends(get_user_service),
 ):
-    email = email.lower().strip()
-    user_data = UserCreate(username=username, email=email, password=password)
-    return await service.register_user(user_data)
+    try:
+        email = email.lower().strip()
+        user_data = UserCreate(username=username, email=email, password=password)
+        return await service.register_user(user_data)
+    except AlreadyRegisteredException as e:
+        raise AlreadyRegisteredHTTPException(str(e))
+    except ServerErrorException as e:
+        raise ServerErrorHTTPException(str(e))
 
 
 @router.post("/users/token", response_model=TokensResponse, status_code=status.HTTP_200_OK)
@@ -36,8 +58,13 @@ async def get_token(
     password: str = Form(...),
     service: UserService = Depends(get_user_service),
 ):
-    data = LoginRequest(email=email, password=password)
-    return await service.login_user(data)
+    try:
+        data = LoginRequest(email=email, password=password)
+        return await service.login_user(data)
+    except UnauthorizedException as e:
+        raise UnauthorizedHTTPException(str(e))
+    except NotFoundException as e:
+        raise NotFoundHTTPException(str(e))
 
 
 @router.post("/users/refresh", response_model=TokensResponse, status_code=status.HTTP_200_OK)
@@ -45,7 +72,12 @@ async def refresh_token(
     refresh_token: str = Header(..., alias="Refresh-Token"),
     service: UserService = Depends(get_user_service),
 ):
-    return await service.refresh_access_token(refresh_token)
+    try:
+        return await service.refresh_access_token(refresh_token)
+    except TokenExpiredException as e:
+        raise UnauthorizedHTTPException(str(e))
+    except InvalidTokenException as e:
+        raise UnauthorizedHTTPException(str(e))
 
 
 @router.get("/users/confirm", status_code=status.HTTP_200_OK)
@@ -54,8 +86,11 @@ async def confirm_email(
     encrypted_user_id: str = Query(...),
     service: UserService = Depends(get_user_service),
 ):
-    user = await service.confirm_user(code, encrypted_user_id)
-    return {"detail": "Email confirmed successfully.", "user": user}
+    try:
+        user = await service.confirm_user(code, encrypted_user_id)
+        return {"detail": "Email confirmed successfully.", "user": user}
+    except UnauthorizedException as e:
+        raise UnauthorizedHTTPException(str(e))
 
 
 @router.post("/users/resend-confirmation", status_code=status.HTTP_200_OK)
@@ -63,8 +98,13 @@ async def resend_confirmation(
     email: EmailStr = Form(...),
     service: UserService = Depends(get_user_service),
 ):
-    email = email.lower().strip()
-    return await service.resend_confirmation_email(email)
+    try:
+        email = email.lower().strip()
+        return await service.resend_confirmation_email(email)
+    except NotFoundException as e:
+        raise NotFoundHTTPException(str(e))
+    except AlreadyConfirmedException as e:
+        raise BadRequestHTTPException(str(e))
 
 
 @router.post("/users/password-reset", status_code=status.HTTP_200_OK)
@@ -72,8 +112,11 @@ async def request_reset(
     email: EmailStr = Form(...),
     service: UserService = Depends(get_user_service),
 ):
-    email = email.lower().strip()
-    return await service.request_password_reset(email)
+    try:
+        email = email.lower().strip()
+        return await service.request_password_reset(email)
+    except NotFoundException as e:
+        raise NotFoundHTTPException(str(e))
 
 
 @router.post("/users/password-reset/confirm", status_code=status.HTTP_200_OK)
@@ -83,7 +126,10 @@ async def reset_password_endpoint(
     new_password: str = Form(...),
     service: UserService = Depends(get_user_service),
 ):
-    return await service.reset_password(code, new_password, encrypted_user_id)
+    try:
+        return await service.reset_password(code, new_password, encrypted_user_id)
+    except UnauthorizedException as e:
+        raise UnauthorizedHTTPException(str(e))
 
 
 @router.get("/users/me")
@@ -101,7 +147,12 @@ async def get_all_users(
     role: str = Query(None),
     service: UserService = Depends(get_user_service),
 ):
-    return await service.get_all_user(page, page_size, sort_by, order, role)
+    try:
+        return await service.get_all_user(page, page_size, sort_by, order, role)
+    except PermissionDeniedException as e:
+        raise PermissionDeniedHTTPException(str(e))
+    except BadRequestException as e:
+        raise BadRequestHTTPException(str(e))
 
 
 @router.get("/roles/all")
@@ -118,7 +169,14 @@ async def update_user_role(
     role: str = Form(...),
     service: UserService = Depends(get_user_service),
 ) -> UserResponse | None:
-    return await service.uow.users.update_user_role(email, role)
+    try:
+        return await service.uow.users.update_user_role(email, role)
+    except PermissionDeniedException as e:
+        raise PermissionDeniedHTTPException(str(e))
+    except NotFoundException as e:
+        raise NotFoundHTTPException(str(e))
+    except BadRequestException as e:
+        raise BadRequestHTTPException(str(e))
 
 
 @router.patch("/users/{user_id}", response_model=UserResponse)
@@ -128,13 +186,23 @@ async def update_user(
     user_id: UUID,
     service: UserService = Depends(get_user_service),
 ) -> UserResponse:
-    return await service.update_user(user_update, user_id)
+    try:
+        return await service.update_user(user_update, user_id)
+    except NotFoundException as e:
+        raise NotFoundHTTPException(str(e))
+    except AlreadyRegisteredException as e:
+        raise AlreadyRegisteredHTTPException(str(e))
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
-    current_user: CurrentUser, user_id: UUID, service: UserService = Depends(get_user_service)
+    current_user: CurrentUser,
+    user_id: UUID,
+    service: UserService = Depends(get_user_service),
 ):
-    is_delete = await service.uow.users.delete(user_id)
-    if is_delete:
-        return {"detail": "User deleted successfully."}
+    try:
+        is_delete = await service.uow.users.delete(user_id)
+        if is_delete:
+            return {"detail": "User deleted successfully."}
+    except NotFoundException as e:
+        raise NotFoundHTTPException(str(e))

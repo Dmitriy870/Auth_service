@@ -6,9 +6,9 @@ from redis.asyncio import Redis
 
 from auth.enums import RoleEnum
 from auth.exceptions import (
-    InvalidOrExpiredTokenException,
+    InvalidOrExpiredTokenHTTPException,
     InvalidTokenException,
-    PermissionDeniedException,
+    PermissionDeniedHTTPException,
     TokenExpiredException,
     UnauthorizedException,
 )
@@ -32,7 +32,7 @@ async def get_current_user(
     try:
         user_id = verify_token(token)
     except (InvalidTokenException, TokenExpiredException):
-        raise InvalidOrExpiredTokenException("You have invalid or expired token")
+        raise InvalidOrExpiredTokenHTTPException("You have invalid or expired token")
 
     user = await uow.users.get_by_id(user_id)
     if not user:
@@ -46,7 +46,7 @@ CurrentUser = Annotated[UserResponse, Depends(get_current_user)]
 async def get_current_admin(current_user: CurrentUser, uow: UnitOfWork = Depends(get_unit_of_work)):
     role = await uow.roles.get_by_id(current_user.role_id)
     if role.name != RoleEnum.ADMIN:
-        raise PermissionDeniedException("Permission denied, you do not have admin role.")
+        raise PermissionDeniedHTTPException("Permission denied, you do not have admin role.")
     return current_user
 
 

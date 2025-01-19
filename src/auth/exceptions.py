@@ -1,105 +1,83 @@
-from typing import Optional
-
 from fastapi import HTTPException, status
 
 
-class BaseHTTPException(HTTPException):
-    """Base class for all http exceptions in this application"""
+class AlreadyRegisteredHTTPException(HTTPException):
+    def __init__(self, detail: str = "Already registered"):
+        super().__init__(status_code=status.HTTP_409_CONFLICT, detail=detail)
 
 
-class BadRequestException(BaseHTTPException):
-    def __init__(self, message: Optional[str] = None) -> None:
-        super().__init__(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Bad request" if message is None else message,
-        )
+class NotFoundHTTPException(HTTPException):
+    def __init__(self, detail: str = "Not found"):
+        super().__init__(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
 
 
-class ConflictRequestException(BaseHTTPException):
-    def __init__(self, message: Optional[str] = None) -> None:
-        super().__init__(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Bad request" if message is None else message,
-        )
+class UnauthorizedHTTPException(HTTPException):
+    def __init__(self, detail: str = "Unauthorized"):
+        super().__init__(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
 
 
-class AlreadyRegisteredException(BaseHTTPException):
-    def __init__(self, message: Optional[str] = None) -> None:
-        super().__init__(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Already exist" if message is None else message,
-        )
+class ServerErrorHTTPException(HTTPException):
+    def __init__(self, detail: str = "Internal server error"):
+        super().__init__(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
 
 
-class NotFoundException(BaseHTTPException):
-    def __init__(self, message: Optional[str] = None) -> None:
-        super().__init__(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Not found" if message is None else message,
-        )
+class InvalidOrExpiredTokenHTTPException(HTTPException):
+    def __init__(self, detail: str = "Invalid or expired token"):
+        super().__init__(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
 
 
-class UnauthorizedException(BaseHTTPException):
-    def __init__(self, message: Optional[str] = None) -> None:
-        super().__init__(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized" if message is None else message,
-        )
+class PermissionDeniedHTTPException(HTTPException):
+    def __init__(self, detail: str = "Permission denied"):
+        super().__init__(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
 
-class AlreadyConfirmedException(BaseHTTPException):
-    def __init__(self, message: Optional[str] = None) -> None:
-        super().__init__(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Already confirmed" if message is None else message,
-        )
+class BadRequestHTTPException(HTTPException):
+    def __init__(self, detail: str = "Bad request"):
+        super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
 
-class InvalidOrExpiredTokenException(BaseHTTPException):
-    def __init__(self, message: Optional[str] = None) -> None:
-        super().__init__(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token" if message is None else message,
-        )
+class AlreadyRegisteredException(Exception):
+
+    pass
 
 
-class ServerErrorException(BaseHTTPException):
-    def __init__(self, message: Optional[str] = None) -> None:
-        super().__init__(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=(
-                "An error occurred while processing the request" if message is None else message
-            ),
-        )
+class NotFoundException(Exception):
+
+    pass
 
 
-class TokenExpiredException(BaseHTTPException):
-    def __init__(self, message: Optional[str] = None) -> None:
-        super().__init__(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired" if message is None else message,
-        )
+class UnauthorizedException(Exception):
+
+    pass
 
 
-class InvalidTokenException(BaseHTTPException):
-    def __init__(self, message: Optional[str] = None) -> None:
-        super().__init__(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token" if message is None else message,
-        )
+class ServerErrorException(Exception):
+    pass
 
 
-class InvalidRoleException(BaseHTTPException):
-    def __init__(self, message: Optional[str] = None) -> None:
-        super().__init__(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid role" if message is None else message,
-        )
+class TokenExpiredException(Exception):
+    pass
 
 
-class PermissionDeniedException(BaseHTTPException):
-    def __init__(self, message: Optional[str] = None) -> None:
-        super().__init__(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied" if message is None else message,
-        )
+class InvalidTokenException(Exception):
+    pass
+
+
+class AlreadyConfirmedException(Exception):
+    pass
+
+
+class BadRequestException(Exception):
+    pass
+
+
+class InvalidOrExpiredTokenException(Exception):
+    pass
+
+
+class PermissionDeniedException(Exception):
+    pass
+
+
+class InvalidRoleException(Exception):
+    pass
