@@ -63,8 +63,12 @@ class UserService:
         code = generate_code()
         encrypted_user_id = encrypt_user_id(str(user.id))
 
-        send_confirmation_email(email=user.email, code=code, encrypted_user_id=encrypted_user_id)
-        await self.redis_client.set(f"email_confirm: {code}", str(user.id), ex=900)
+        send_confirmation_email(
+            email=user.email,
+            code=code,
+            encrypted_user_id=encrypted_user_id,
+        )
+        await self.redis_client.set(f"ecnfrm: {code}", str(user.id), ex=900)
         await self.uow.commit()
 
         return user
@@ -99,7 +103,7 @@ class UserService:
         except ValueError:
             raise UnauthorizedException("Malformed user identifier.")
 
-        user_id_from_redis = await self.redis_client.get(f"email_confirm: {code}")
+        user_id_from_redis = await self.redis_client.get(f"ecnfrm: {code}")
         if not user_id_from_redis:
             raise UnauthorizedException("Invalid or expired confirmation code.")
 
@@ -110,7 +114,7 @@ class UserService:
         user = await self.uow.users.update(user_confirm)
 
         await self.uow.commit()
-        await self.redis_client.delete(f"email_confirm: {code}")
+        await self.redis_client.delete(f"ecnfrm: {code}")
 
         return user
 
@@ -125,8 +129,12 @@ class UserService:
         code = generate_code()
         encrypted_user_id = encrypt_user_id(str(user.id))
 
-        send_confirmation_email(email=user.email, code=code, encrypted_user_id=encrypted_user_id)
-        await self.redis_client.set(f"email_confirm: {code}", str(user.id), ex=900)
+        send_confirmation_email(
+            email=user.email,
+            code=code,
+            encrypted_user_id=encrypted_user_id,
+        )
+        await self.redis_client.set(f"ecnfrm: {code}", str(user.id), ex=900)
 
         return {"detail": "Confirmation email sent."}
 
@@ -138,7 +146,11 @@ class UserService:
         code = generate_code()
         encrypted_user_id = encrypt_user_id(str(user.id))
 
-        send_password_reset_email(email=user.email, code=code, encrypted_user_id=encrypted_user_id)
+        send_password_reset_email(
+            email=user.email,
+            code=code,
+            encrypted_user_id=encrypted_user_id,
+        )
         await self.redis_client.set(f"password_reset: {code}", str(user.id), ex=900)
 
         return {"detail": "Password reset email successfully sent."}
@@ -202,9 +214,11 @@ class UserService:
             encrypted_user_id = encrypt_user_id(str(user.id))
 
             send_confirmation_email(
-                email=user_update.email, code=code, encrypted_user_id=encrypted_user_id
+                email=user_update.email,
+                code=code,
+                encrypted_user_id=encrypted_user_id,
             )
-            user_update: UserResponse = await self.uow.users.set_false_email(user_id)
-            await self.redis_client.set(f"email_confirm: {code}", str(user_id), ex=900)
+            user_update = await self.uow.users.set_false_email(user_id)
+            await self.redis_client.set(f"ecnfrm: {code}", str(user_id), ex=900)
 
         return user_update

@@ -37,17 +37,14 @@ class BadRequestHTTPException(HTTPException):
 
 
 class AlreadyRegisteredException(Exception):
-
     pass
 
 
 class NotFoundException(Exception):
-
     pass
 
 
 class UnauthorizedException(Exception):
-
     pass
 
 

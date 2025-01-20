@@ -100,13 +100,15 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType, Resp
 
         return self.response_schema.model_validate(obj, from_attributes=True)
 
-    async def delete(self, entity_id: UUID) -> bool:
+    async def delete(self, entity_id: UUID) -> ResponseSchemaType:
 
         stmt = select(self.model).where(self.model.id == entity_id)
         result = await self.uow.execute(stmt)
         obj = result.scalars().first()
-        if obj:
-            await self.uow.delete(obj)
-            await self.uow.flush()
-            return True
-        return False
+
+        if not obj:
+            raise NotFoundException(f"Entity with id {entity_id} not found.")
+
+        await self.uow.delete(obj)
+        await self.uow.flush()
+        return self.response_schema.model_validate(obj, from_attributes=True)

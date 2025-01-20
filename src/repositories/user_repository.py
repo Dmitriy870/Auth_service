@@ -55,7 +55,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate, UserResponse])
 
         return self.response_schema.model_validate(user, from_attributes=True)
 
-    async def set_false_email(self, user_id):
+    async def set_false_email(self, user_id) -> UserResponse:
         stmt = select(self.model).where(self.model.id == user_id)
         result = await self.uow.execute(stmt)
         user = result.scalars().first()

@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Form, Header, Query, status
+from fastapi import APIRouter, Depends, Form, Query, status
 from pydantic import EmailStr
 
 from auth.dependencies import CurrentAdmin, CurrentUser, get_user_service
@@ -69,7 +69,7 @@ async def get_token(
 
 @router.post("/users/refresh", response_model=TokensResponse, status_code=status.HTTP_200_OK)
 async def refresh_token(
-    refresh_token: str = Header(..., alias="Refresh-Token"),
+    refresh_token: str,
     service: UserService = Depends(get_user_service),
 ):
     try:
@@ -133,10 +133,11 @@ async def reset_password_endpoint(
 
 
 @router.get("/users/me")
-async def some_protected_route(current_user: CurrentUser) -> UserResponse:
+async def get_current_user(current_user: CurrentUser) -> UserResponse:
     return current_user
 
 
+@router.get("/users/admin/all", response_model=PaginatedUserResponse)
 @router.get("/users/admin/all", response_model=PaginatedUserResponse)
 async def get_all_users(
     current_admin: CurrentAdmin,
@@ -146,7 +147,7 @@ async def get_all_users(
     order: str = Query("asc", regex="^(asc|desc)$"),
     role: str = Query(None),
     service: UserService = Depends(get_user_service),
-):
+) -> PaginatedUserResponse:
     try:
         return await service.get_all_user(page, page_size, sort_by, order, role)
     except PermissionDeniedException as e:
@@ -155,9 +156,9 @@ async def get_all_users(
         raise BadRequestHTTPException(str(e))
 
 
-@router.get("/roles/all")
+@router.get("/roles/")
 async def get_all_roles(
-    current_user: CurrentUser, service: UserService = Depends(get_user_service)
+    current_admin: CurrentAdmin, service: UserService = Depends(get_user_service)
 ) -> list[RoleResponse]:
     return await service.uow.roles.get_all()
 
@@ -199,10 +200,8 @@ async def delete_user(
     current_user: CurrentUser,
     user_id: UUID,
     service: UserService = Depends(get_user_service),
-):
+) -> UserResponse:
     try:
-        is_delete = await service.uow.users.delete(user_id)
-        if is_delete:
-            return {"detail": "User deleted successfully."}
+        return await service.uow.users.delete(user_id)
     except NotFoundException as e:
         raise NotFoundHTTPException(str(e))
