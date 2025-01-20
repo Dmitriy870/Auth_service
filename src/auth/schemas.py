@@ -73,3 +73,7 @@ class PaginatedUserResponse(BaseModel):
 
 class SetFalse(BaseModel):
     is_approved: bool = Field(False)
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str

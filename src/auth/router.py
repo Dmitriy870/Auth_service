@@ -24,6 +24,7 @@ from auth.exceptions import (
 from auth.schemas import (
     LoginRequest,
     PaginatedUserResponse,
+    RefreshTokenRequest,
     RoleResponse,
     TokensResponse,
     UserCreate,
@@ -69,11 +70,11 @@ async def get_token(
 
 @router.post("/users/refresh", response_model=TokensResponse, status_code=status.HTTP_200_OK)
 async def refresh_token(
-    refresh_token: str,
+    request: RefreshTokenRequest,
     service: UserService = Depends(get_user_service),
 ):
     try:
-        return await service.refresh_access_token(refresh_token)
+        return await service.refresh_access_token(request.refresh_token)
     except TokenExpiredException as e:
         raise UnauthorizedHTTPException(str(e))
     except InvalidTokenException as e:
@@ -156,7 +157,7 @@ async def get_all_users(
         raise BadRequestHTTPException(str(e))
 
 
-@router.get("/roles/")
+@router.get("/admin/roles/")
 async def get_all_roles(
     current_admin: CurrentAdmin, service: UserService = Depends(get_user_service)
 ) -> list[RoleResponse]:
@@ -195,7 +196,7 @@ async def update_user(
         raise AlreadyRegisteredHTTPException(str(e))
 
 
-@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/users/{user_id}")
 async def delete_user(
     current_user: CurrentUser,
     user_id: UUID,
