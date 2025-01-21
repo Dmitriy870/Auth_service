@@ -39,6 +39,16 @@ class UserResponse(UserCreate):
     role_id: UUID = Field(...)
 
 
+class UserResponseWithRoleName(UserCreate):
+    id: UUID = Field(...)
+    created_at: datetime
+    updated_at: datetime
+    is_approved: bool = Field(...)
+    is_globally_blocked: bool = Field(...)
+    role_id: UUID = Field(...)
+    role: str = Field(...)
+
+
 class RoleBase(BaseModel):
     id: UUID = Field(...)
     name: str = Field(...)
@@ -61,6 +71,7 @@ class TokensResponse(BaseModel):
     access_token: str = Field(...)
     refresh_token: str | None = Field(None)
     token_type: str = Field("bearer")
+    role: str | None = Field(None)
 
 
 class PaginatedUserResponse(BaseModel):
@@ -76,4 +87,13 @@ class SetFalse(BaseModel):
 
 
 class RefreshTokenRequest(BaseModel):
-    refresh_token: str
+    refresh_token: str = Field(...)
+
+
+class AccessTokenRequest(BaseModel):
+    access_token: str = Field(...)
+
+
+class ValidationResponse(BaseModel):
+    valid: bool = Field(...)
+    user_id: UUID = Field(...)

@@ -29,11 +29,12 @@ def verify_password(password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed_password.encode())
 
 
-def generate_tokens(user_id: UUID) -> TokensResponse:
+def generate_tokens(user_id: UUID, role: str, only_access: bool = False) -> TokensResponse:
     """Generates access and refresh tokens."""
     access_token_payload = {
         "user_id": str(user_id),
         "exp": datetime.now(UTC) + timedelta(minutes=jwt_config.ACCESS_TOKEN_EXPIRE_MINUTES),
+        "role": role,
     }
     access_token = jwt.encode(
         access_token_payload, jwt_config.SECRET_KEY, algorithm=jwt_config.ALGORITHM
@@ -42,13 +43,17 @@ def generate_tokens(user_id: UUID) -> TokensResponse:
     refresh_token_payload = {
         "user_id": str(user_id),
         "exp": datetime.now(UTC) + timedelta(minutes=jwt_config.REFRESH_TOKEN_EXPIRE),
+        "role": role,
     }
     refresh_token = jwt.encode(
         refresh_token_payload, jwt_config.SECRET_KEY, algorithm=jwt_config.ALGORITHM
     )
 
     return TokensResponse(
-        access_token=access_token, refresh_token=refresh_token, token_type="bearer"
+        access_token=access_token,
+        refresh_token=refresh_token if not only_access else None,
+        token_type="bearer",
+        role=role,
     )
 
 

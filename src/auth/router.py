@@ -29,6 +29,7 @@ from auth.schemas import (
     TokensResponse,
     UserCreate,
     UserResponse,
+    UserResponseWithRoleName,
     UserUpdate,
 )
 from auth.service import UserService
@@ -134,11 +135,13 @@ async def reset_password_endpoint(
 
 
 @router.get("/users/me")
-async def get_current_user(current_user: CurrentUser) -> UserResponse:
-    return current_user
+async def get_current_user(
+    current_user: CurrentUser,
+    service: UserService = Depends(get_user_service),
+) -> UserResponseWithRoleName:
+    return await service.get_me(current_user)
 
 
-@router.get("/users/admin/all", response_model=PaginatedUserResponse)
 @router.get("/users/admin/all", response_model=PaginatedUserResponse)
 async def get_all_users(
     current_admin: CurrentAdmin,

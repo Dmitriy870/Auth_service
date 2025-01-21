@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  db:
+  auth_db:
     image: postgres:13
     container_name: auth_db
     environment:
@@ -52,7 +52,7 @@ services:
     ports:
       - "8001:8000"
     depends_on:
-      - db
+      - auth_db
       - redis
       - kafka
     env_file:
