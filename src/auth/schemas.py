@@ -1,8 +1,32 @@
 from datetime import datetime
+from enum import Enum
 from typing import List
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
+
+
+class KafkaTopic(str, Enum):
+    MODELS_TOPIC = "models_topic"
+    EVENTS_TOPIC = "events_topic"
+
+
+class EventName(str, Enum):
+    REGISTRATION = "registration"
+    LOGIN = "login"
+    REFRESH = "refresh_token"
+    CONFIRM = "user_confim_email"
+    RESEND = "resend_email_request"
+    RESET_PASSWORD = "reset_password_request"
+    CONFIRM_PASSWORD = "confirm_password_reset"
+    GET_ALL = "get_all"
+    UPDATE = "update"
+    GET = "get_me"
+
+
+class EventType(str, Enum):
+    MODEL = "MODEL"
+    EVENT = "EVENT"
 
 
 class UserBase(BaseModel):
@@ -97,3 +121,11 @@ class AccessTokenRequest(BaseModel):
 class ValidationResponse(BaseModel):
     valid: bool = Field(...)
     user_id: UUID = Field(...)
+
+
+class Event(BaseModel):
+    event_name: str = Field(...)
+    model_data: dict | None = Field(None)
+    entity_id: str | None = Field(None)
+    model_type: str | None = Field(None)
+    received_from: str = "auth"
