@@ -20,6 +20,7 @@ from auth.schemas import (
     EventName,
     KafkaTopic,
     LoginRequest,
+    RoleResponse,
     TokensResponse,
     UserConfirm,
     UserCreate,
@@ -302,3 +303,36 @@ class UserService:
         await self.producer.produce_message(KafkaTopic.MODELS_TOPIC.value, event)
 
         return user_with_role
+
+    async def get_all_roles(self) -> list[RoleResponse]:
+        roles = await self.uow.roles.get_all()
+        event = Event(
+            event_name=EventName.GET_ALL.value,
+            model_type="RoleResponse",
+        )
+        await self.producer.produce_message(KafkaTopic.MODELS_TOPIC.value, event)
+
+        return roles
+
+    async def update_user_role(self, email: str, role_name: str) -> UserResponse:
+        user = await self.uow.users.update_user_role(email, role_name)
+        event = Event(
+            event_name=EventName.UPDATE.value,
+            model_type="UserResponse",
+            model_data=user.model_dump(),
+            entity_id=str(user.id),
+        )
+        await self.producer.produce_message(KafkaTopic.MODELS_TOPIC.value, event)
+
+        return user
+
+    async def delete_user(self, user_id: UUID) -> UserResponse:
+        user = await self.uow.users.delete(user_id)
+        event = Event(
+            event_name=EventName.DELETE.value,
+            model_type="UserResponse",
+            model_data=user.model_dump(),
+            entity_id=str(user.id),
+        )
+        await self.producer.produce_message(KafkaTopic.MODELS_TOPIC.value, event)
+        return user

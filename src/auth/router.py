@@ -164,7 +164,7 @@ async def get_all_users(
 async def get_all_roles(
     current_admin: CurrentAdmin, service: UserService = Depends(get_user_service)
 ) -> list[RoleResponse]:
-    return await service.uow.roles.get_all()
+    return await service.get_all_roles()
 
 
 @router.post("/user/admin/role", response_model=UserResponse)
@@ -173,9 +173,9 @@ async def update_user_role(
     email: EmailStr = Form(...),
     role: str = Form(...),
     service: UserService = Depends(get_user_service),
-) -> UserResponse | None:
+) -> UserResponse:
     try:
-        return await service.uow.users.update_user_role(email, role)
+        return await service.update_user_role(email, role)
     except PermissionDeniedException as e:
         raise PermissionDeniedHTTPException(str(e))
     except NotFoundException as e:
@@ -206,6 +206,6 @@ async def delete_user(
     service: UserService = Depends(get_user_service),
 ) -> UserResponse:
     try:
-        return await service.uow.users.delete(user_id)
+        return await service.delete_user(user_id)
     except NotFoundException as e:
         raise NotFoundHTTPException(str(e))

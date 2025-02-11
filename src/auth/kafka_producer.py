@@ -47,13 +47,3 @@ class KafkaProducerSingleton:
             logger.error(f"Timeout occurred while sending message to topic '{topic}'.")
         except KafkaError as e:
             logger.error(f"Kafka error while sending message to topic '{topic}': {e}")
-
-    # Для тестирования подключения
-    async def check_connection(self):
-        try:
-            await self.producer.client.force_metadata_update()
-            logger.info("Kafka connection OK")
-            return True
-        except Exception as e:
-            logger.error("Kafka connection FAILED: %s", e)
-            return False

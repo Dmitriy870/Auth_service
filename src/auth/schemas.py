@@ -22,6 +22,7 @@ class EventName(str, Enum):
     GET_ALL = "get_all"
     UPDATE = "update"
     GET = "get_me"
+    DELETE = "delete"
 
 
 class EventType(str, Enum):
