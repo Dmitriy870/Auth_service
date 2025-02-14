@@ -14,13 +14,9 @@ from auth.exceptions import (
     TokenExpiredException,
     UnauthorizedException,
 )
-from auth.kafka_producer import KafkaProducerSingleton
+from auth.logging_conf import configurate_logging
 from auth.schemas import (
-    Event,
-    EventName,
-    KafkaTopic,
     LoginRequest,
-    RoleResponse,
     TokensResponse,
     UserConfirm,
     UserCreate,
@@ -45,14 +41,13 @@ from repositories.uow import UnitOfWork
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"  # или DEBUG
 )
-logger = logging.getLogger(__name__)
+logger = configurate_logging(logging.INFO)
 
 
 class UserService:
     def __init__(self, uow: UnitOfWork, redis_client: Redis):
         self.uow = uow
         self.redis_client = redis_client
-        self.producer = KafkaProducerSingleton()
 
     async def register_user(self, user_data: UserCreate) -> UserResponse:
         existing_user = await self.uow.users.get_user_by_email(user_data.email)
@@ -84,14 +79,6 @@ class UserService:
         await self.redis_client.set(f"ecnfrm: {code}", str(user.id), ex=900)
         await self.uow.commit()
 
-        event = Event(
-            event_name=EventName.REGISTRATION.value,
-            model_type="UserResponse",
-            model_data=user.model_dump(),
-            entity_id=str(user.id),
-        )
-
-        await self.producer.produce_message(KafkaTopic.MODELS_TOPIC.value, event)
         return user
 
     async def login_user(self, data: LoginRequest) -> TokensResponse:
@@ -99,16 +86,12 @@ class UserService:
         user = await self.uow.users.get_user_by_email(data.email)
         if not user:
             raise NotFoundException("User not found.")
-
         if not verify_password(data.password, user.password):
             raise UnauthorizedException("Invalid email or password.")
 
         role = await self.uow.roles.get_role_by_id(user.role_id)
-
         tokens = generate_tokens(user.id, role.name)
-        event = Event(event_name=EventName.LOGIN.value, entity_id=str(user.id))
 
-        await self.producer.produce_message("events_topic", event)
         return tokens
 
     async def refresh_access_token(self, refresh_token: str) -> TokensResponse:
@@ -122,10 +105,6 @@ class UserService:
         role = await self.uow.roles.get_role_by_id(user.role_id)
 
         tokens = generate_tokens(user_id, role.name, True)
-
-        event = Event(event_name=EventName.REFRESH.value, entity_id=str(user.id))
-
-        await self.producer.produce_message(KafkaTopic.EVENTS_TOPIC.value, event)
         return tokens
 
     async def confirm_user(self, code: str, encrypted_user_id: str) -> UserResponse:
@@ -139,7 +118,6 @@ class UserService:
         user_id_from_redis = await self.redis_client.get(f"ecnfrm: {code}")
         if not user_id_from_redis:
             raise UnauthorizedException("Invalid or expired confirmation code.")
-
         if user_id_from_redis != str(user_id_from_query):
             raise UnauthorizedException("Invalid user identifier.")
 
@@ -148,10 +126,6 @@ class UserService:
 
         await self.uow.commit()
         await self.redis_client.delete(f"ecnfrm: {code}")
-
-        event = Event(event_name=EventName.CONFIRM.value, entity_id=str(user.id))
-
-        await self.producer.produce_message(KafkaTopic.EVENTS_TOPIC.value, event)
 
         return user
 
@@ -173,10 +147,6 @@ class UserService:
         )
         await self.redis_client.set(f"ecnfrm: {code}", str(user.id), ex=900)
 
-        event = Event(event_name=EventName.RESEND.value, entity_id=str(user.id))
-
-        await self.producer.produce_message(KafkaTopic.EVENTS_TOPIC.value, event)
-
         return {"detail": "Confirmation email sent."}
 
     async def request_password_reset(self, email: str) -> dict:
@@ -193,10 +163,6 @@ class UserService:
             encrypted_user_id=encrypted_user_id,
         )
         await self.redis_client.set(f"password_reset: {code}", str(user.id), ex=900)
-
-        event = Event(event_name=EventName.RESET_PASSWORD.value, entity_id=str(user.id))
-
-        await self.producer.produce_message(KafkaTopic.EVENTS_TOPIC.value, event)
 
         return {"detail": "Password reset email successfully sent."}
 
@@ -222,12 +188,6 @@ class UserService:
         await self.redis_client.delete(f"password_reset: {code}")
         await self.uow.session.commit()
 
-        event = Event(
-            event_name=EventName.CONFIRM_PASSWORD.value, entity_id=str(user_id_from_query)
-        )
-
-        await self.producer.produce_message(KafkaTopic.EVENTS_TOPIC.value, event)
-
         return {"detail": "Password successfully reset."}
 
     async def get_all_user(
@@ -239,10 +199,6 @@ class UserService:
         role: str | None,
     ):
         users, total = await self.uow.users.get_all_paginated(page, page_size, sort_by, order, role)
-
-        event = Event(event_name=EventName.GET_ALL.value)
-
-        await self.producer.produce_message(KafkaTopic.MODELS_TOPIC.value, event)
 
         return {
             "users": users,
@@ -277,15 +233,6 @@ class UserService:
             user_update = await self.uow.users.set_false_email(user_id)
             await self.redis_client.set(f"ecnfrm: {code}", str(user_id), ex=900)
 
-        event = Event(
-            event_name=EventName.UPDATE.value,
-            model_type="UserResponse",
-            model_data=user_update.model_dump(),
-            entity_id=str(user.id),
-        )
-
-        await self.producer.produce_message(KafkaTopic.MODELS_TOPIC.value, event)
-
         return user_update
 
     async def get_me(self, current_user):
@@ -293,46 +240,4 @@ class UserService:
         role = await self.uow.roles.get_role_by_id(role_id)
         role_name = role.name
         user_with_role = UserResponseWithRoleName(**current_user.model_dump(), role=role_name)
-        event = Event(
-            event_name=EventName.GET.value,
-            model_type="UserResponseWithRoleName",
-            model_data=user_with_role.model_dump(),
-            entity_id=str(user_with_role.id),
-        )
-
-        await self.producer.produce_message(KafkaTopic.MODELS_TOPIC.value, event)
-
         return user_with_role
-
-    async def get_all_roles(self) -> list[RoleResponse]:
-        roles = await self.uow.roles.get_all()
-        event = Event(
-            event_name=EventName.GET_ALL.value,
-            model_type="RoleResponse",
-        )
-        await self.producer.produce_message(KafkaTopic.MODELS_TOPIC.value, event)
-
-        return roles
-
-    async def update_user_role(self, email: str, role_name: str) -> UserResponse:
-        user = await self.uow.users.update_user_role(email, role_name)
-        event = Event(
-            event_name=EventName.UPDATE.value,
-            model_type="UserResponse",
-            model_data=user.model_dump(),
-            entity_id=str(user.id),
-        )
-        await self.producer.produce_message(KafkaTopic.MODELS_TOPIC.value, event)
-
-        return user
-
-    async def delete_user(self, user_id: UUID) -> UserResponse:
-        user = await self.uow.users.delete(user_id)
-        event = Event(
-            event_name=EventName.DELETE.value,
-            model_type="UserResponse",
-            model_data=user.model_dump(),
-            entity_id=str(user.id),
-        )
-        await self.producer.produce_message(KafkaTopic.MODELS_TOPIC.value, event)
-        return user

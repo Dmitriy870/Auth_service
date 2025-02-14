@@ -3,7 +3,13 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Form, Query, status
 from pydantic import EmailStr
 
-from auth.dependencies import CurrentAdmin, CurrentUser, get_user_service
+from auth.analytics_service import AnalyticsService
+from auth.dependencies import (
+    CurrentAdmin,
+    CurrentUser,
+    get_analytics_service,
+    get_user_service,
+)
 from auth.exceptions import (
     AlreadyConfirmedException,
     AlreadyRegisteredException,
@@ -22,6 +28,9 @@ from auth.exceptions import (
     UnauthorizedHTTPException,
 )
 from auth.schemas import (
+    Event,
+    EventName,
+    KafkaTopic,
     LoginRequest,
     PaginatedUserResponse,
     RefreshTokenRequest,
@@ -33,6 +42,7 @@ from auth.schemas import (
     UserUpdate,
 )
 from auth.service import UserService
+from auth.utils import decrypt_user_id, verify_token
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -43,11 +53,20 @@ async def register(
     email: EmailStr = Form(...),
     password: str = Form(...),
     service: UserService = Depends(get_user_service),
+    analytics: AnalyticsService = Depends(get_analytics_service),
 ):
     try:
         email = email.lower().strip()
         user_data = UserCreate(username=username, email=email, password=password)
-        return await service.register_user(user_data)
+        user = await service.register_user(user_data)
+        event = Event(
+            event_name=EventName.REGISTRATION.value,
+            model_type="UserResponse",
+            model_data=user.model_dump(),
+            entity_id=str(user.id),
+        )
+        await analytics.publish_event(KafkaTopic.MODELS_TOPIC.value, event)
+        return user
     except AlreadyRegisteredException as e:
         raise AlreadyRegisteredHTTPException(str(e))
     except ServerErrorException as e:
@@ -59,10 +78,18 @@ async def get_token(
     email: EmailStr = Form(...),
     password: str = Form(...),
     service: UserService = Depends(get_user_service),
+    analytics: AnalyticsService = Depends(get_analytics_service),
 ):
     try:
         data = LoginRequest(email=email, password=password)
-        return await service.login_user(data)
+        tokens = await service.login_user(data)
+        user = await service.uow.users.get_user_by_email(email)
+        event = Event(
+            event_name=EventName.LOGIN.value,
+            entity_id=str(user.id),
+        )
+        await analytics.publish_event(KafkaTopic.EVENTS_TOPIC.value, event)
+        return tokens
     except UnauthorizedException as e:
         raise UnauthorizedHTTPException(str(e))
     except NotFoundException as e:
@@ -73,9 +100,18 @@ async def get_token(
 async def refresh_token(
     request: RefreshTokenRequest,
     service: UserService = Depends(get_user_service),
+    analytics: AnalyticsService = Depends(get_analytics_service),
 ):
     try:
-        return await service.refresh_access_token(request.refresh_token)
+        tokens = await service.refresh_access_token(request.refresh_token)
+        user_id = verify_token(request.refresh_token)
+        user = await service.uow.users.get_by_id(user_id)
+        event = Event(
+            event_name=EventName.REFRESH.value,
+            entity_id=str(user.id),
+        )
+        await analytics.publish_event(KafkaTopic.EVENTS_TOPIC.value, event)
+        return tokens
     except TokenExpiredException as e:
         raise UnauthorizedHTTPException(str(e))
     except InvalidTokenException as e:
@@ -87,9 +123,15 @@ async def confirm_email(
     code: str = Query(...),
     encrypted_user_id: str = Query(...),
     service: UserService = Depends(get_user_service),
+    analytics: AnalyticsService = Depends(get_analytics_service),
 ):
     try:
         user = await service.confirm_user(code, encrypted_user_id)
+        event = Event(
+            event_name=EventName.CONFIRM.value,
+            entity_id=str(user.id),
+        )
+        await analytics.publish_event(KafkaTopic.EVENTS_TOPIC.value, event)
         return {"detail": "Email confirmed successfully.", "user": user}
     except UnauthorizedException as e:
         raise UnauthorizedHTTPException(str(e))
@@ -99,10 +141,18 @@ async def confirm_email(
 async def resend_confirmation(
     email: EmailStr = Form(...),
     service: UserService = Depends(get_user_service),
+    analytics: AnalyticsService = Depends(get_analytics_service),
 ):
     try:
         email = email.lower().strip()
-        return await service.resend_confirmation_email(email)
+        result = await service.resend_confirmation_email(email)
+        user = await service.uow.users.get_user_by_email(email)
+        event = Event(
+            event_name=EventName.RESEND.value,
+            entity_id=str(user.id),
+        )
+        await analytics.publish_event(KafkaTopic.EVENTS_TOPIC.value, event)
+        return result
     except NotFoundException as e:
         raise NotFoundHTTPException(str(e))
     except AlreadyConfirmedException as e:
@@ -113,10 +163,18 @@ async def resend_confirmation(
 async def request_reset(
     email: EmailStr = Form(...),
     service: UserService = Depends(get_user_service),
+    analytics: AnalyticsService = Depends(get_analytics_service),
 ):
     try:
         email = email.lower().strip()
-        return await service.request_password_reset(email)
+        result = await service.request_password_reset(email)
+        user = await service.uow.users.get_user_by_email(email)
+        event = Event(
+            event_name=EventName.RESET_PASSWORD.value,
+            entity_id=str(user.id),
+        )
+        await analytics.publish_event(KafkaTopic.EVENTS_TOPIC.value, event)
+        return result
     except NotFoundException as e:
         raise NotFoundHTTPException(str(e))
 
@@ -127,9 +185,17 @@ async def reset_password_endpoint(
     encrypted_user_id: str = Query(...),
     new_password: str = Form(...),
     service: UserService = Depends(get_user_service),
+    analytics: AnalyticsService = Depends(get_analytics_service),
 ):
     try:
-        return await service.reset_password(code, new_password, encrypted_user_id)
+        result = await service.reset_password(code, new_password, encrypted_user_id)
+        user_id = decrypt_user_id(encrypted_user_id)
+        event = Event(
+            event_name=EventName.CONFIRM_PASSWORD.value,
+            entity_id=str(user_id),
+        )
+        await analytics.publish_event(KafkaTopic.EVENTS_TOPIC.value, event)
+        return result
     except UnauthorizedException as e:
         raise UnauthorizedHTTPException(str(e))
 
@@ -138,11 +204,20 @@ async def reset_password_endpoint(
 async def get_current_user(
     current_user: CurrentUser,
     service: UserService = Depends(get_user_service),
+    analytics: AnalyticsService = Depends(get_analytics_service),
 ) -> UserResponseWithRoleName:
-    return await service.get_me(current_user)
+    user_with_role = await service.get_me(current_user)
+    event = Event(
+        event_name=EventName.GET.value,
+        model_type="UserResponseWithRoleName",
+        model_data=user_with_role.model_dump(),
+        entity_id=str(user_with_role.id),
+    )
+    await analytics.publish_event(KafkaTopic.MODELS_TOPIC.value, event)
+    return user_with_role
 
 
-@router.get("/users/admin/all", response_model=PaginatedUserResponse)
+@router.get("/users/admin", response_model=PaginatedUserResponse)
 async def get_all_users(
     current_admin: CurrentAdmin,
     page: int = Query(1, ge=1),
@@ -151,9 +226,13 @@ async def get_all_users(
     order: str = Query("asc", regex="^(asc|desc)$"),
     role: str = Query(None),
     service: UserService = Depends(get_user_service),
+    analytics: AnalyticsService = Depends(get_analytics_service),
 ) -> PaginatedUserResponse:
     try:
-        return await service.get_all_user(page, page_size, sort_by, order, role)
+        result = await service.get_all_user(page, page_size, sort_by, order, role)
+        event = Event(event_name=EventName.GET_ALL.value)
+        await analytics.publish_event(KafkaTopic.MODELS_TOPIC.value, event)
+        return result
     except PermissionDeniedException as e:
         raise PermissionDeniedHTTPException(str(e))
     except BadRequestException as e:
@@ -162,9 +241,17 @@ async def get_all_users(
 
 @router.get("/admin/roles/")
 async def get_all_roles(
-    current_admin: CurrentAdmin, service: UserService = Depends(get_user_service)
+    current_admin: CurrentAdmin,
+    service: UserService = Depends(get_user_service),
+    analytics: AnalyticsService = Depends(get_analytics_service),
 ) -> list[RoleResponse]:
-    return await service.get_all_roles()
+    roles = await service.uow.roles.get_all()
+    event = Event(
+        event_name=EventName.GET_ALL.value,
+        model_type="RoleResponse",
+    )
+    await analytics.publish_event(KafkaTopic.MODELS_TOPIC.value, event)
+    return roles
 
 
 @router.post("/user/admin/role", response_model=UserResponse)
@@ -173,9 +260,18 @@ async def update_user_role(
     email: EmailStr = Form(...),
     role: str = Form(...),
     service: UserService = Depends(get_user_service),
+    analytics: AnalyticsService = Depends(get_analytics_service),
 ) -> UserResponse:
     try:
-        return await service.update_user_role(email, role)
+        user = await service.uow.users.update_user_role(email, role)
+        event = Event(
+            event_name=EventName.UPDATE.value,
+            model_type="UserResponse",
+            model_data=user.model_dump(),
+            entity_id=str(user.id),
+        )
+        await analytics.publish_event(KafkaTopic.MODELS_TOPIC.value, event)
+        return user
     except PermissionDeniedException as e:
         raise PermissionDeniedHTTPException(str(e))
     except NotFoundException as e:
@@ -190,22 +286,40 @@ async def update_user(
     current_user: CurrentUser,
     user_id: UUID,
     service: UserService = Depends(get_user_service),
+    analytics: AnalyticsService = Depends(get_analytics_service),
 ) -> UserResponse:
     try:
-        return await service.update_user(user_update, user_id)
+        user = await service.update_user(user_update, user_id)
+        event = Event(
+            event_name=EventName.UPDATE.value,
+            model_type="UserResponse",
+            model_data=user.model_dump(),
+            entity_id=str(user.id),
+        )
+        await analytics.publish_event(KafkaTopic.MODELS_TOPIC.value, event)
+        return user
     except NotFoundException as e:
         raise NotFoundHTTPException(str(e))
     except AlreadyRegisteredException as e:
         raise AlreadyRegisteredHTTPException(str(e))
 
 
-@router.delete("/users/{user_id}")
+@router.delete("/users/{user_id}", response_model=UserResponse)
 async def delete_user(
     current_user: CurrentUser,
     user_id: UUID,
     service: UserService = Depends(get_user_service),
+    analytics: AnalyticsService = Depends(get_analytics_service),
 ) -> UserResponse:
     try:
-        return await service.delete_user(user_id)
+        user = await service.uow.users.delete(user_id)
+        event = Event(
+            event_name=EventName.DELETE.value,
+            model_type="UserResponse",
+            model_data=user.model_dump(),
+            entity_id=str(user.id),
+        )
+        await analytics.publish_event(KafkaTopic.MODELS_TOPIC.value, event)
+        return user
     except NotFoundException as e:
         raise NotFoundHTTPException(str(e))
