@@ -36,6 +36,11 @@ class BadRequestHTTPException(HTTPException):
         super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
 
+class ErrorCallingFileServiceHTTPException(HTTPException):
+    def __init__(self, detail: str = "Error Calling File Service"):
+        super().__init__(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)
+
+
 class AlreadyRegisteredException(Exception):
     pass
 
@@ -77,4 +82,8 @@ class PermissionDeniedException(Exception):
 
 
 class InvalidRoleException(Exception):
+    pass
+
+
+class ErrorCallingFileService(Exception):
     pass

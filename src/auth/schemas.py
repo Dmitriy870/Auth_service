@@ -62,6 +62,7 @@ class UserResponse(UserCreate):
     is_approved: bool = Field(...)
     is_globally_blocked: bool = Field(...)
     role_id: UUID = Field(...)
+    avatar: str | None = Field(default=None)
 
 
 class UserResponseWithRoleName(UserCreate):
@@ -71,6 +72,7 @@ class UserResponseWithRoleName(UserCreate):
     is_approved: bool = Field(...)
     is_globally_blocked: bool = Field(...)
     role_id: UUID = Field(...)
+    avatar: str | None = Field(default=None)
     role: str = Field(...)
 
 

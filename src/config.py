@@ -70,6 +70,8 @@ class PostgresConfig(BaseSettings):
 
 class VersionConfig(BaseSettings):
     API_V1_PREFIX: str = Field(default="/api/v1")
+    FILE_URL_POST: str = Field(default="http://files:8000/api/v1/files")
+    FILE_URL_DELETE: str = Field(default="http://files:8000/api/v1/files/")
 
 
 class DBSettings(PostgresConfig):

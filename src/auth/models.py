@@ -30,6 +30,7 @@ class User(ModelBase, TimeFieldBase, Base):
     is_approved: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_globally_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     blocked_by: Mapped[uuid.UUID | None] = mapped_column(default=None, nullable=True)
+    avatar: Mapped[str | None] = mapped_column(String, nullable=True)
 
     role = relationship("Role", back_populates="users", lazy="joined")
 

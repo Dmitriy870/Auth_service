@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Form, Query, status
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from pydantic import EmailStr
 
 from auth.analytics_service import AnalyticsService
@@ -16,6 +16,8 @@ from auth.exceptions import (
     AlreadyRegisteredHTTPException,
     BadRequestException,
     BadRequestHTTPException,
+    ErrorCallingFileService,
+    ErrorCallingFileServiceHTTPException,
     InvalidTokenException,
     NotFoundException,
     NotFoundHTTPException,
@@ -323,3 +325,13 @@ async def delete_user(
         return user
     except NotFoundException as e:
         raise NotFoundHTTPException(str(e))
+
+
+@router.post("/users/avatar/{user_id}")
+async def load_file(
+    user_id: UUID, file: UploadFile = File(...), service: UserService = Depends(get_user_service)
+):
+    try:
+        return await service.load_file(user_id, file)
+    except ErrorCallingFileService:
+        raise ErrorCallingFileServiceHTTPException
