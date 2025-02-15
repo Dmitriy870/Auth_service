@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 
 from cryptography.fernet import InvalidToken
@@ -13,12 +14,14 @@ from auth.exceptions import (
     TokenExpiredException,
     UnauthorizedException,
 )
+from auth.logging_conf import configurate_logging
 from auth.schemas import (
     LoginRequest,
     TokensResponse,
     UserConfirm,
     UserCreate,
     UserResponse,
+    UserResponseWithRoleName,
     UserUpdate,
     UserUpdatePassword,
 )
@@ -34,6 +37,8 @@ from auth.utils import (
     verify_token,
 )
 from repositories.uow import UnitOfWork
+
+logger = configurate_logging(logging.INFO)
 
 
 class UserService:
@@ -74,14 +79,16 @@ class UserService:
         return user
 
     async def login_user(self, data: LoginRequest) -> TokensResponse:
+        logger.info("login user")
         user = await self.uow.users.get_user_by_email(data.email)
         if not user:
             raise NotFoundException("User not found.")
-
         if not verify_password(data.password, user.password):
             raise UnauthorizedException("Invalid email or password.")
 
-        tokens = generate_tokens(user.id)
+        role = await self.uow.roles.get_role_by_id(user.role_id)
+        tokens = generate_tokens(user.id, role.name)
+
         return tokens
 
     async def refresh_access_token(self, refresh_token: str) -> TokensResponse:
@@ -91,8 +98,10 @@ class UserService:
             raise TokenExpiredException("Refresh token has expired.")
         except InvalidTokenException:
             raise InvalidTokenException("Invalid refresh token.")
+        user = await self.uow.users.get_by_id(user_id)
+        role = await self.uow.roles.get_role_by_id(user.role_id)
 
-        tokens = generate_tokens(user_id)
+        tokens = generate_tokens(user_id, role.name, True)
         return tokens
 
     async def confirm_user(self, code: str, encrypted_user_id: str) -> UserResponse:
@@ -106,7 +115,6 @@ class UserService:
         user_id_from_redis = await self.redis_client.get(f"ecnfrm: {code}")
         if not user_id_from_redis:
             raise UnauthorizedException("Invalid or expired confirmation code.")
-
         if user_id_from_redis != str(user_id_from_query):
             raise UnauthorizedException("Invalid user identifier.")
 
@@ -188,6 +196,7 @@ class UserService:
         role: str | None,
     ):
         users, total = await self.uow.users.get_all_paginated(page, page_size, sort_by, order, role)
+
         return {
             "users": users,
             "total": total,
@@ -222,3 +231,10 @@ class UserService:
             await self.redis_client.set(f"ecnfrm: {code}", str(user_id), ex=900)
 
         return user_update
+
+    async def get_me(self, current_user):
+        role_id = current_user.role_id
+        role = await self.uow.roles.get_role_by_id(role_id)
+        role_name = role.name
+        user_with_role = UserResponseWithRoleName(**current_user.model_dump(), role=role_name)
+        return user_with_role

@@ -4,6 +4,7 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from redis.asyncio import Redis
 
+from auth.analytics_service import AnalyticsService
 from auth.enums import RoleEnum
 from auth.exceptions import (
     InvalidOrExpiredTokenHTTPException,
@@ -12,6 +13,7 @@ from auth.exceptions import (
     TokenExpiredException,
     UnauthorizedException,
 )
+from auth.kafka_producer import KafkaProducer
 from auth.schemas import UserResponse
 from auth.service import UserService
 from auth.utils import verify_token
@@ -66,3 +68,13 @@ async def get_user_service(
     redis_client: Redis = Depends(get_redis_client),
 ) -> UserService:
     return UserService(uow, redis_client)
+
+
+async def get_kafka_producer() -> KafkaProducer:
+    return KafkaProducer()
+
+
+async def get_analytics_service(
+    producer: KafkaProducer = Depends(get_kafka_producer),
+) -> AnalyticsService:
+    return AnalyticsService(producer)
