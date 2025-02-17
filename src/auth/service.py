@@ -1,16 +1,13 @@
 import logging
 from uuid import UUID
 
-import httpx
 from cryptography.fernet import InvalidToken
-from dependency_injector.wiring import Provide, inject
 from redis.asyncio import Redis
 
 from auth.enums import RoleEnum
 from auth.exceptions import (
     AlreadyConfirmedException,
     AlreadyRegisteredException,
-    ErrorCallingFileService,
     InvalidTokenException,
     NotFoundException,
     ServerErrorException,
@@ -39,8 +36,6 @@ from auth.utils import (
     verify_password,
     verify_token,
 )
-from config import VersionConfig
-from containers.version_config import VersionContainer
 from repositories.uow import UnitOfWork
 
 logger = configurate_logging(logging.INFO)
@@ -243,45 +238,3 @@ class UserService:
         role_name = role.name
         user_with_role = UserResponseWithRoleName(**current_user.model_dump(), role=role_name)
         return user_with_role
-
-    @inject
-    async def load_file(
-        self,
-        user_id,
-        file,
-        version_config: VersionConfig = Provide[VersionContainer.version_config],
-    ) -> dict:
-        try:
-            async with httpx.AsyncClient() as client:
-                files = {"file": (file.filename, file.file, file.content_type)}
-                response = await client.post(version_config.FILE_URL_POST, files=files)
-            if response.status_code != 200:
-                raise ErrorCallingFileService("Error calling file service")
-            data = response.json()
-            slug = data["slug"]
-            old_file_slug = await self.uow.users.check_avatar(user_id)
-            await self.uow.users.insert_slug(user_id, slug)
-            if old_file_slug:
-                try:
-                    async with httpx.AsyncClient() as client:
-                        delete_url = f"{version_config.FILE_URL_DELETE}{old_file_slug}"
-                        await client.delete(delete_url)
-                except httpx.RequestError as e:
-                    logger.error(f"Network error when deleting old avatar: {str(e)}")
-                return {
-                    "message": "Start loading,old avatar was successfully deleted",
-                    "slug_of_file": slug,
-                }
-            return {"message": "Start loading", "slug_of_file": slug}
-
-        except httpx.RequestError as e:
-            logger.error(f"Network error when calling the file service: {str(e)}")
-            raise ErrorCallingFileService("The file service is unavailable")
-
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error {e.response.status_code} from the file service")
-            raise ErrorCallingFileService(f"File service error: {e.response.status_code}")
-
-        except ValueError as e:
-            logger.error(f"Invalid JSON response from the file service: {str(e)}")
-            raise ErrorCallingFileService("Invalid response from the file service")

@@ -8,6 +8,7 @@ from auth.dependencies import (
     CurrentAdmin,
     CurrentUser,
     get_analytics_service,
+    get_file_service,
     get_user_service,
 )
 from auth.exceptions import (
@@ -21,6 +22,7 @@ from auth.exceptions import (
     InvalidTokenException,
     NotFoundException,
     NotFoundHTTPException,
+    NotImageHTTPException,
     PermissionDeniedException,
     PermissionDeniedHTTPException,
     ServerErrorException,
@@ -29,6 +31,7 @@ from auth.exceptions import (
     UnauthorizedException,
     UnauthorizedHTTPException,
 )
+from auth.file_service import FileService
 from auth.schemas import (
     Event,
     EventName,
@@ -215,7 +218,7 @@ async def get_current_user(
         model_data=user_with_role.model_dump(),
         entity_id=str(user_with_role.id),
     )
-    await analytics.publish_event(KafkaTopic.MODELS_TOPIC.value, event)
+    await analytics.publish_event(KafkaTopic.EVENTS_TOPIC.value, event)
     return user_with_role
 
 
@@ -328,10 +331,14 @@ async def delete_user(
 
 
 @router.post("/users/avatar/{user_id}")
-async def load_file(
-    user_id: UUID, file: UploadFile = File(...), service: UserService = Depends(get_user_service)
+async def load_avatar(
+    user_id: UUID,
+    file: UploadFile = File(...),
+    file_service: FileService = Depends(get_file_service),
 ):
+    if not file.content_type.startswith("image/"):
+        raise NotImageHTTPException("File must be an image")
     try:
-        return await service.load_file(user_id, file)
+        return await file_service.load_avatar(user_id, file)
     except ErrorCallingFileService:
         raise ErrorCallingFileServiceHTTPException

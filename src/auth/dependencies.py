@@ -13,6 +13,7 @@ from auth.exceptions import (
     TokenExpiredException,
     UnauthorizedException,
 )
+from auth.file_service import FileService
 from auth.kafka_producer import KafkaProducer
 from auth.schemas import UserResponse
 from auth.service import UserService
@@ -68,6 +69,12 @@ async def get_user_service(
     redis_client: Redis = Depends(get_redis_client),
 ) -> UserService:
     return UserService(uow, redis_client)
+
+
+async def get_file_service(
+    uow: UnitOfWork = Depends(get_unit_of_work),
+) -> FileService:
+    return FileService(uow)
 
 
 async def get_kafka_producer() -> KafkaProducer:
