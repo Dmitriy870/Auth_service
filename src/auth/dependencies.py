@@ -71,10 +71,8 @@ async def get_user_service(
     return UserService(uow, redis_client)
 
 
-async def get_file_service(
-    uow: UnitOfWork = Depends(get_unit_of_work),
-) -> FileService:
-    return FileService(uow)
+async def get_file_service() -> FileService:
+    return FileService()
 
 
 async def get_kafka_producer() -> KafkaProducer:

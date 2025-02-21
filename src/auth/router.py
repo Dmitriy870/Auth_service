@@ -332,13 +332,18 @@ async def delete_user(
 
 @router.post("/users/avatar/{user_id}")
 async def load_avatar(
+    current_admin: CurrentAdmin,
     user_id: UUID,
     file: UploadFile = File(...),
     file_service: FileService = Depends(get_file_service),
+    service: UserService = Depends(get_user_service),
 ):
     if not file.content_type.startswith("image/"):
         raise NotImageHTTPException("File must be an image")
     try:
-        return await file_service.load_avatar(user_id, file)
+        old_file_slug = await service.uow.users.check_avatar(user_id)
+        slug = await file_service.load_avatar(file, old_file_slug)
+        await service.uow.users.insert_slug(user_id, slug)
+        return slug
     except ErrorCallingFileService:
         raise ErrorCallingFileServiceHTTPException

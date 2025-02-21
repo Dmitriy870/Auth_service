@@ -15,7 +15,7 @@ class EventName(str, Enum):
     REGISTRATION = "registration"
     LOGIN = "login"
     REFRESH = "refresh_token"
-    CONFIRM = "user_confim_email"
+    CONFIRM = "user_confirm_email"
     RESEND = "resend_email_request"
     RESET_PASSWORD = "reset_password_request"
     CONFIRM_PASSWORD = "confirm_password_reset"

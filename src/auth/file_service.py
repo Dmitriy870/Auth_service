@@ -1,5 +1,4 @@
 import logging
-from uuid import UUID
 
 import httpx
 from dependency_injector.wiring import Provide, inject
@@ -9,20 +8,16 @@ from auth.exceptions import ErrorCallingFileService
 from auth.logging_conf import configurate_logging
 from config import FileConfig
 from containers.file_config import FileConfigContainer
-from repositories.uow import UnitOfWork
 
 logger = configurate_logging(logging.INFO)
 
 
 class FileService:
-    def __init__(self, uow: UnitOfWork):
-        self.uow = uow
-
     @inject
     async def load_avatar(
         self,
-        user_id: UUID,
         file: UploadFile,
+        old_file_slug: str,
         file_config: FileConfig = Provide[FileConfigContainer.file_config],
     ) -> str:
         try:
@@ -33,8 +28,6 @@ class FileService:
                 raise ErrorCallingFileService("Error calling file service")
             data = response.json()
             slug = data["slug"]
-            old_file_slug = await self.uow.users.check_avatar(user_id)
-            await self.uow.users.insert_slug(user_id, slug)
             if old_file_slug:
                 try:
                     async with httpx.AsyncClient() as client:
