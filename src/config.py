@@ -91,3 +91,12 @@ class EncryptionConfig(BaseSettings):
     class Config:
         env_prefix = "ENCRYPTION_"
         case_sensitive = False
+
+
+class FileConfig(BaseSettings):
+    BASE_URL: str = Field(...)
+    UPLOAD_URL: str = Field(...)
+    DELETE_URL: str = Field(...)
+
+    class Config:
+        env_prefix = "FILE_"

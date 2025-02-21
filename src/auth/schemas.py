@@ -15,7 +15,7 @@ class EventName(str, Enum):
     REGISTRATION = "registration"
     LOGIN = "login"
     REFRESH = "refresh_token"
-    CONFIRM = "user_confim_email"
+    CONFIRM = "user_confirm_email"
     RESEND = "resend_email_request"
     RESET_PASSWORD = "reset_password_request"
     CONFIRM_PASSWORD = "confirm_password_reset"
@@ -62,6 +62,7 @@ class UserResponse(UserCreate):
     is_approved: bool = Field(...)
     is_globally_blocked: bool = Field(...)
     role_id: UUID = Field(...)
+    avatar: str | None = Field(default=None)
 
 
 class UserResponseWithRoleName(UserCreate):
@@ -71,6 +72,7 @@ class UserResponseWithRoleName(UserCreate):
     is_approved: bool = Field(...)
     is_globally_blocked: bool = Field(...)
     role_id: UUID = Field(...)
+    avatar: str | None = Field(default=None)
     role: str = Field(...)
 
 

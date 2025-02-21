@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from pydantic import EmailStr
 from sqlalchemy.future import select
 
@@ -55,7 +57,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate, UserResponse])
 
         return self.response_schema.model_validate(user, from_attributes=True)
 
-    async def set_false_email(self, user_id) -> UserResponse:
+    async def set_false_email(self, user_id: UUID) -> UserResponse:
         stmt = select(self.model).where(self.model.id == user_id)
         result = await self.uow.execute(stmt)
         user = result.scalars().first()
@@ -63,3 +65,21 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate, UserResponse])
         user.is_approved = False
         await self.uow.flush()
         return self.response_schema.model_validate(user, from_attributes=True)
+
+    async def insert_slug(self, user_id: UUID, slug: str) -> UserResponse:
+        stmt = select(self.model).where(self.model.id == user_id)
+        result = await self.uow.execute(stmt)
+        user = result.scalars().first()
+
+        user.avatar = slug
+        await self.uow.flush()
+        return self.response_schema.model_validate(user, from_attributes=True)
+
+    async def check_avatar(self, user_id: UUID) -> str | None:
+        stmt = select(self.model).where(self.model.id == user_id)
+        result = await self.uow.execute(stmt)
+        user = result.scalars().first()
+        if user.avatar:
+            return user.avatar
+
+        return None

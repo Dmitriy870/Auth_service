@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from auth.logging_conf import configurate_logging
 from auth.router import router as auth_router
 from config import VersionConfig
+from containers.file_config import FileConfigContainer
 from containers.kafka import KafkaContainer
 
 logger = configurate_logging(logging.INFO)
@@ -18,6 +19,8 @@ async def lifespan(app: FastAPI):
     container = KafkaContainer()
     container.wire(modules=["auth.kafka_producer"])
     logger.info("Containers successfully  initialized")
+    file_container = FileConfigContainer()
+    file_container.wire(modules=["auth.file_service"])
     yield
 
 

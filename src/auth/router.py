@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Form, Query, status
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from pydantic import EmailStr
 
 from auth.analytics_service import AnalyticsService
@@ -8,6 +8,7 @@ from auth.dependencies import (
     CurrentAdmin,
     CurrentUser,
     get_analytics_service,
+    get_file_service,
     get_user_service,
 )
 from auth.exceptions import (
@@ -16,9 +17,12 @@ from auth.exceptions import (
     AlreadyRegisteredHTTPException,
     BadRequestException,
     BadRequestHTTPException,
+    ErrorCallingFileService,
+    ErrorCallingFileServiceHTTPException,
     InvalidTokenException,
     NotFoundException,
     NotFoundHTTPException,
+    NotImageHTTPException,
     PermissionDeniedException,
     PermissionDeniedHTTPException,
     ServerErrorException,
@@ -27,6 +31,7 @@ from auth.exceptions import (
     UnauthorizedException,
     UnauthorizedHTTPException,
 )
+from auth.file_service import FileService
 from auth.schemas import (
     Event,
     EventName,
@@ -213,7 +218,7 @@ async def get_current_user(
         model_data=user_with_role.model_dump(),
         entity_id=str(user_with_role.id),
     )
-    await analytics.publish_event(KafkaTopic.MODELS_TOPIC.value, event)
+    await analytics.publish_event(KafkaTopic.EVENTS_TOPIC.value, event)
     return user_with_role
 
 
@@ -323,3 +328,22 @@ async def delete_user(
         return user
     except NotFoundException as e:
         raise NotFoundHTTPException(str(e))
+
+
+@router.post("/users/avatar/{user_id}")
+async def load_avatar(
+    current_admin: CurrentAdmin,
+    user_id: UUID,
+    file: UploadFile = File(...),
+    file_service: FileService = Depends(get_file_service),
+    service: UserService = Depends(get_user_service),
+):
+    if not file.content_type.startswith("image/"):
+        raise NotImageHTTPException("File must be an image")
+    try:
+        old_file_slug = await service.uow.users.check_avatar(user_id)
+        slug = await file_service.load_avatar(file, old_file_slug)
+        await service.uow.users.insert_slug(user_id, slug)
+        return slug
+    except ErrorCallingFileService:
+        raise ErrorCallingFileServiceHTTPException
