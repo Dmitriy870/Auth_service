@@ -11,6 +11,9 @@ RUN pip install poetry && \
 COPY src /app/src
 COPY alembic.ini /app/alembic.ini
 COPY alembic /app/alembic
+COPY tests /app/tests
+COPY pytest.ini /app/pytest.ini
+COPY .test.env /app/.test.env
 
 
 ENV PYTHONPATH "${PYTHONPATH}:/app/src"

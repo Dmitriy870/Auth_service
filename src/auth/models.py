@@ -9,7 +9,7 @@ from auth.enums import RoleEnum
 from models import Base, ModelBase, TimeFieldBase
 
 
-class Role(ModelBase, TimeFieldBase, Base):
+class Role(Base, ModelBase, TimeFieldBase):
     name: Mapped[RoleEnum] = mapped_column(sqlalchemy_Enum(RoleEnum), nullable=False, unique=True)
 
     users = relationship("User", back_populates="role", lazy="selectin")
@@ -65,12 +65,20 @@ class Permission(ModelBase, TimeFieldBase, Base):
 class RolePermission(TimeFieldBase, Base):
     __tablename__ = "role_permissions"
 
-    role_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("role.id"), primary_key=True)
-    permission_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("permission.id"), primary_key=True)
+    role_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("role.id", ondelete="CASCADE"), primary_key=True
+    )
+    permission_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("permission.id", ondelete="CASCADE"), primary_key=True
+    )
 
 
 class UserPermission(TimeFieldBase, Base):
     __tablename__ = "user_permissions"
 
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("user.id"), primary_key=True)
-    permission_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("permission.id"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"), primary_key=True
+    )
+    permission_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("permission.id", ondelete="CASCADE"), primary_key=True
+    )

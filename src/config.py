@@ -63,6 +63,7 @@ class PostgresConfig(BaseSettings):
     HOST: str = Field(...)
     PORT: int = Field(...)
     URL: PostgresDsn = Field(...)
+    MODE: str = Field(...)
 
     class Config:
         env_prefix = "POSTGRES_"
