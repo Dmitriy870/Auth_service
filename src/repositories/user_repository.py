@@ -3,9 +3,9 @@ from uuid import UUID
 from pydantic import EmailStr
 from sqlalchemy.future import select
 
-from auth import Role, User
 from auth.enums import RoleEnum
 from auth.exceptions import InvalidRoleException, NotFoundException
+from auth.models import Role, User
 from auth.schemas import UserCreate, UserResponse, UserUpdate
 from repositories.base import BaseRepository
 

@@ -2,7 +2,7 @@ from uuid import UUID
 
 from sqlalchemy.future import select
 
-from auth import Role
+from auth.models import Role
 from auth.schemas import RoleResponse
 from repositories.base import BaseRepository
 
